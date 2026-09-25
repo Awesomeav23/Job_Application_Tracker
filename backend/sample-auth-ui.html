@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Job Tracker Auth Test UI</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 700px;
+        margin: 40px auto;
+        padding: 20px;
+        background: #f5f7fb;
+      }
+      .panel {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 4px 18px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
+      }
+      input, button {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin: 10px 0;
+        padding: 10px 12px;
+        font-size: 16px;
+      }
+      button {
+        cursor: pointer;
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 6px;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: #111827;
+        color: #e5e7eb;
+        padding: 16px;
+        border-radius: 6px;
+        overflow: auto;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+      }
+      .row button {
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <h2>Auth Test UI</h2>
+      <label>Email</label>
+      <input id="email" type="email" value="test@example.com" />
+
+      <label>Password</label>
+      <input id="password" type="password" value="password123" />
+
+      <div class="row">
+        <button onclick="registerUser()">Register</button>
+        <button onclick="loginUser()">Login</button>
+      </div>
+
+      <div class="row">
+        <button onclick="getMe()">Get /api/auth/me</button>
+        <button onclick="clearOutput()">Clear</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Response</h3>
+      <pre id="output">{}</pre>
+    </div>
+
+    <script>
+      let token = '';
+      const output = document.getElementById('output');
+
+      function logResponse(data) {
+        output.textContent = JSON.stringify(data, null, 2);
+      }
+
+      function clearOutput() {
+        output.textContent = '{}';
+      }
+
+      async function registerUser() {
+        const payload = {
+          email: document.getElementById('email').value,
+          password: document.getElementById('password').value,
+          displayName: 'Sample User'
+        };
+
+        const res = await fetch('http://localhost:4000/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        token = data.token || '';
+        logResponse({ status: res.status, body: data });
+      }
+
+      async function loginUser() {
+        const payload = {
+          email: document.getElementById('email').value,
+          password: document.getElementById('password').value
+        };
+
+        const res = await fetch('http://localhost:4000/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        token = data.token || '';
+        logResponse({ status: res.status, body: data });
+      }
+
+      async function getMe() {
+        const res = await fetch('http://localhost:4000/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const data = await res.json();
+        logResponse({ status: res.status, body: data });
+      }
+    </script>
+  </body>
+</html>

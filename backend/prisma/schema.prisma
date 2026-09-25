@@ -1,0 +1,320 @@
+// AI Job Application Tracker — data model
+// Traces to: REQUIREMENTS.md, IMPLEMENTATION_PLAN.md Phase 10
+//
+// Scope: Milestones 3–8 (MVP). Email-integration models are sketched at the
+// bottom, commented out, so Milestone 10 does not require a redesign.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+/// APP-004. Transitions are deliberately unconstrained; analytics read
+/// ApplicationEvent history rather than assuming a linear pipeline.
+enum ApplicationStatus {
+  SAVED
+  APPLIED
+  RECRUITER_SCREEN
+  INTERVIEW
+  OFFER
+  REJECTED
+  WITHDRAWN
+}
+
+enum DocumentKind {
+  RESUME
+  COVER_LETTER
+}
+
+/// Distinguishes the mock provider used in Milestone 8 from real Bedrock
+/// calls, so early analyses stay identifiable once the real provider lands.
+enum AiProvider {
+  MOCK
+  BEDROCK
+}
+
+/// How an application entered the system. EXTENSION is written by EXT-003.
+enum ApplicationSource {
+  MANUAL
+  EXTENSION
+}
+
+// ─────────────────────────────────────────────────────────────
+// User
+// ─────────────────────────────────────────────────────────────
+
+/// AUTH-001, AUTH-002. NFR-001: only passwordHash is ever stored.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  applications      Application[]
+  documents         Document[]
+  analyses          Analysis[]
+  questionSets      InterviewQuestionSet[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Application
+// ─────────────────────────────────────────────────────────────
+
+/// APP-001 through APP-006.
+///
+/// `userId` is required from the first migration. The plan builds CRUD at M4
+/// and auth at M5, so there is a window with no registered users — resolved by
+/// M3's seed (already a plan deliverable), which creates a development user
+/// whose id M4 reads from DEV_USER_ID. M5 replaces that with the id from the
+/// authenticated request and the seed becomes test-only.
+///
+/// This is preferred over making userId nullable and backfilling later: the
+/// ownership constraint is never weakened, and it needs only one migration.
+model Application {
+  id             String            @id @default(cuid())
+  userId         String
+  company        String
+  jobTitle       String
+  jobDescription String            @db.Text
+  status         ApplicationStatus @default(SAVED)
+
+  // Optional fields, APP-001
+  location    String?
+  salary      String? // free text: ranges, currencies and "competitive" all occur
+  url         String?
+  dateApplied DateTime?
+  notes       String?   @db.Text
+
+  source    ApplicationSource @default(MANUAL)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  // RES-003 / DOC-002. SetNull, not Cascade: deleting a document must never
+  // delete the applications that referenced it.
+  resumeId      String?
+  coverLetterId String?
+
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resume       Document?              @relation("ApplicationResume", fields: [resumeId], references: [id], onDelete: SetNull)
+  coverLetter  Document?              @relation("ApplicationCoverLetter", fields: [coverLetterId], references: [id], onDelete: SetNull)
+  events       ApplicationEvent[]
+  analyses     Analysis[]
+  questionSets InterviewQuestionSet[]
+
+  // APP-006 and ANA-002 filter by (user, status); APP-005 and ANA-006 sort by date.
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([userId, company])
+  @@map("applications")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Documents
+// ─────────────────────────────────────────────────────────────
+
+/// RES-001, RES-002, DOC-001. Resumes and cover letters share a table and are
+/// distinguished by `kind` — the fields are identical and the alternative is
+/// two tables maintained in lockstep.
+///
+/// CAUTION: `kind` is NOT enforced by the foreign keys on Application. A
+/// foreign key points at a table, not at a condition on that table, so at the
+/// database level nothing stops a COVER_LETTER being attached as resumeId.
+/// The service layer must check it and return 400 WRONG_DOCUMENT_KIND
+/// (API.md). Enforcing it in Postgres would need @@unique([id, kind]) plus a
+/// composite FK — correct, but heavier than this project warrants.
+///
+/// IMPORTANT (AI-003): a row is immutable once analyses cite it. Replacing a
+/// file means inserting a new row. `label` may be renamed freely; the stored
+/// file may not be swapped.
+model Document {
+  id     String       @id @default(cuid())
+  userId String
+  kind   DocumentKind
+
+  label   String // RES-002, e.g. "Software Engineer Resume v4"
+  version String? // optional explicit version for sorting/display
+
+  // Storage metadata. The file itself lives on disk or S3, never in Postgres.
+  storageKey       String @unique
+  originalFileName String
+  mimeType         String
+  sizeBytes        Int
+
+  /// Extracted plain text, used as AI-001 input. Nullable so extraction can
+  /// move between upload time and analysis time without a migration.
+  extractedText String? @db.Text
+
+  /// Set instead of deleting when a document is cited by analyses and so
+  /// cannot be removed. Excluded from list queries unless includeArchived
+  /// is passed. Keeps the row, and its provenance, intact.
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user                    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationsAsResume    Application[]          @relation("ApplicationResume")
+  applicationsAsCoverLtr  Application[]          @relation("ApplicationCoverLetter")
+  analyses                Analysis[]
+
+  @@index([userId, kind, archivedAt, createdAt])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Status history
+// ─────────────────────────────────────────────────────────────
+
+/// APP-004 writes one row per status change. This table is what makes
+/// ANA-003, ANA-004 and ANA-005 computable — current status alone cannot tell
+/// you whether an application ever reached interview, or how long it took.
+model ApplicationEvent {
+  id            String             @id @default(cuid())
+  applicationId String
+  fromStatus    ApplicationStatus? // null on the creation event
+  toStatus      ApplicationStatus
+  occurredAt    DateTime           @default(now())
+  note          String?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, occurredAt])
+  @@index([toStatus, occurredAt])
+  @@map("application_events")
+}
+
+// ─────────────────────────────────────────────────────────────
+// AI
+// ─────────────────────────────────────────────────────────────
+
+/// AI-001 and AI-003. `documentId` is required and guarded: an analysis
+/// without a resume is meaningless, and a resume with analyses must not be
+/// deleted out from under them.
+///
+/// VERIFIED 2026-09-25 (prisma/verify-cascade.ts, Postgres 16):
+///   - Deleting a document that an analysis cites FAILS with P2003 / 23503.
+///     The AI-003 guarantee holds. The API turns this into
+///     409 DOCUMENT_IN_USE and offers archiving instead (API.md).
+///   - Deleting a User SUCCEEDS. The cascade removes the analyses in the
+///     same statement, so nothing is left referencing the document by the
+///     time the constraint is checked.
+///
+/// NoAction vs Restrict makes NO practical difference here — both were tested,
+/// under both constraint-creation orders, and behaved identically. Postgres
+/// only distinguishes them for DEFERRABLE constraints, which Prisma does not
+/// generate. NoAction is kept because it is the default and stays correct if a
+/// deferred transaction is ever needed; there is no ordering hazard to avoid.
+model Analysis {
+  id            String @id @default(cuid())
+  userId        String // denormalized from application for uniform AUTH-003 scoping
+  applicationId String
+  documentId    String
+
+  matchScore         Int // 0–100
+  summary            String   @db.Text
+  strengths          String[]
+  missingSkills      String[]
+  relevantExperience String[]
+
+  // Provenance beyond the resume version, per AI-003.
+  provider    AiProvider
+  modelId     String
+  promptVersion String
+  rawResponse Json? // retained for debugging prompt changes
+  tokensUsed  Int?
+
+  createdAt DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  document    Document    @relation(fields: [documentId], references: [id], onDelete: NoAction)
+
+  @@index([applicationId, createdAt])
+  @@index([userId, createdAt])
+  @@map("analyses")
+}
+
+/// AI-002. Kept separate from Analysis because interview questions derive from
+/// the job description alone — no resume. Folding both into one table would
+/// force `documentId` nullable and weaken the AI-003 guarantee above.
+model InterviewQuestionSet {
+  id            String @id @default(cuid())
+  userId        String
+  applicationId String
+
+  questions String[]
+
+  provider      AiProvider
+  modelId       String
+  promptVersion String
+  rawResponse   Json?
+  tokensUsed    Int?
+
+  createdAt DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, createdAt])
+  @@map("interview_question_sets")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Milestone 10 — email integration (not yet migrated)
+// ─────────────────────────────────────────────────────────────
+//
+// Sketched now so the MVP schema does not need reshaping later. Uncomment and
+// migrate when EMAIL-001 starts.
+//
+// enum EmailProvider { GMAIL OUTLOOK }
+//
+// model EmailAccount {
+//   id           String        @id @default(cuid())
+//   userId       String
+//   provider     EmailProvider
+//   address      String
+//   accessToken  String        // encrypted at rest, NFR — see EMAIL-001
+//   refreshToken String        // encrypted at rest
+//   expiresAt    DateTime
+//   lastSyncedAt DateTime?
+//   createdAt    DateTime      @default(now())
+//
+//   user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   messages EmailMessage[]
+//
+//   @@unique([userId, provider, address])
+//   @@map("email_accounts")
+// }
+//
+// model EmailMessage {
+//   id               String   @id @default(cuid())
+//   emailAccountId   String
+//   providerMessageId String  // for idempotent re-sync
+//   subject          String
+//   sender           String
+//   receivedAt       DateTime
+//   snippet          String   @db.Text
+//
+//   isJobRelated     Boolean  @default(false)  // EMAIL-002
+//   applicationId    String?                    // EMAIL-003, null when unmatched
+//   matchConfidence  Float?
+//
+//   suggestedStatus  ApplicationStatus?         // EMAIL-004
+//   suggestionState  String   @default("PENDING") // PENDING | CONFIRMED | DISMISSED
+//
+//   @@unique([emailAccountId, providerMessageId])
+//   @@index([applicationId])
+//   @@map("email_messages")
+// }

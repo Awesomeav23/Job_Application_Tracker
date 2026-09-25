@@ -1,0 +1,24 @@
+# Postgres for the Job Application Tracker.
+# Port 5435 deliberately: 5432, 5433 and 5434 are already taken on this machine
+# (5433 is the Pet Services / Pitchwise collision). See ARCHITECTURE.md section 9.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobtracker-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobtracker
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: jobtracker
+    ports:
+      - "5435:5432"
+    volumes:
+      - jobtracker-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobtracker -d jobtracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  jobtracker-pgdata:
