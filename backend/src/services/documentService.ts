@@ -2,9 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import mammoth from 'mammoth';
 import { PDFParse } from 'pdf-parse';
+import { env } from '../config/env';
 import { prisma } from '../config/prisma';
 
-const STORAGE_ROOT = path.resolve(process.cwd(), 'uploads');
+const STORAGE_ROOT = env.UPLOAD_ROOT
+  ? path.resolve(env.UPLOAD_ROOT)
+  : path.resolve(process.cwd(), 'uploads');
 
 function buildStorageKey(userId: string, fileName: string) {
   return path.posix.join('documents', userId, fileName).replace('\\', '/');

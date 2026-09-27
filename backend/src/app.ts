@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { env } from './config/env';
 import authRoutes from './routes/auth';
 import applicationRoutes from './routes/applications';
 import documentRoutes from './routes/documents';
@@ -22,7 +23,9 @@ declare global {
 export const app = express();
 
 // Allow browser clients to call the API from a different origin.
-app.use(cors());
+// If FRONTEND_ORIGIN is set, only that origin is allowed; otherwise reflect the
+// request origin so local dev works from any port.
+app.use(cors({ origin: env.FRONTEND_ORIGIN ?? true }));
 
 // Parse incoming JSON request bodies.
 app.use(express.json());
