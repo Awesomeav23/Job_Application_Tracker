@@ -29,7 +29,7 @@ import './App.css'
 import { ApiError, apiFetch, authenticate, clearSession, getCurrentUser, hasSession, type AuthUser } from './lib/api'
 
 type Status = 'SAVED' | 'APPLIED' | 'RECRUITER_SCREEN' | 'INTERVIEW' | 'OFFER' | 'REJECTED' | 'WITHDRAWN'
-type View = 'overview' | 'board' | 'applications' | 'stats' | 'documents' | 'profile'
+type View = 'overview' | 'board' | 'applications' | 'stats' | 'documents' | 'profile' | 'settings'
 type DocumentKind = 'RESUME' | 'COVER_LETTER'
 
 interface DocumentAttachment {
@@ -1043,7 +1043,7 @@ function App() {
           <button className={view === 'stats' ? 'nav-link active' : 'nav-link'} onClick={() => setView('stats')}><Sparkles size={17} />Stats</button>
         </nav>
         <div className="sidebar-bottom">
-          <button className="nav-link muted-link" onClick={() => setNotice('Settings will be available in a later milestone.')}><Settings2 size={17} />Settings</button>
+          <button className="nav-link muted-link" onClick={() => setView('settings')}><Settings2 size={17} />Settings</button>
           <button className="nav-link muted-link" onClick={() => setNotice('Help will be available in a later milestone.')}><CircleHelp size={17} />Help</button>
           <div
             className="account-anchor sidebar-account"
@@ -1066,7 +1066,7 @@ function App() {
                   <div><strong>{authUser.displayName || 'No display name'}</strong><small>{authUser.email}</small></div>
                 </div>
                 <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setView('profile') }}><UserRound size={14} />View profile</button>
-                <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setNotice('Settings will be available in a later milestone.') }}><Settings2 size={14} />Settings</button>
+                <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setView('settings') }}><Settings2 size={14} />Settings</button>
                 <div className="account-menu-divider" />
                 <button role="menuitem" className="account-menu-item danger" onClick={() => { setAccountMenu(null); signOut() }}><LogOut size={14} />Sign out</button>
               </div>
@@ -1077,7 +1077,7 @@ function App() {
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><span className="crumb-separator">/</span><strong>{view === 'overview' ? 'Dashboard' : view === 'board' ? 'Board' : view === 'stats' ? 'Stats' : view === 'documents' ? 'Documents' : view === 'profile' ? 'Profile' : 'Applications'}</strong></div>
+          <div className="breadcrumb"><span>Workspace</span><span className="crumb-separator">/</span><strong>{view === 'overview' ? 'Dashboard' : view === 'board' ? 'Board' : view === 'stats' ? 'Stats' : view === 'documents' ? 'Documents' : view === 'profile' ? 'Profile' : view === 'settings' ? 'Settings' : 'Applications'}</strong></div>
           <div className="topbar-actions">
             <span className="today-label"><CalendarDays size={14} />Friday, September 25</span>
             <button className="help-button" aria-label="Help" title="Help"><CircleHelp size={18} /></button>
@@ -1102,7 +1102,7 @@ function App() {
                     <div><strong>{authUser.displayName || 'No display name'}</strong><small>{authUser.email}</small></div>
                   </div>
                   <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setView('profile') }}><UserRound size={14} />View profile</button>
-                  <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setNotice('Settings will be available in a later milestone.') }}><Settings2 size={14} />Settings</button>
+                  <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setView('settings') }}><Settings2 size={14} />Settings</button>
                   <div className="account-menu-divider" />
                   <button role="menuitem" className="account-menu-item danger" onClick={() => { setAccountMenu(null); signOut() }}><LogOut size={14} />Sign out</button>
                 </div>
@@ -1243,6 +1243,77 @@ function App() {
                   <span><span className="activity-swatch activity-swatch-created" /> Created</span>
                   <span><span className="activity-swatch activity-swatch-applied" /> Applied</span>
                 </div>
+              </section>
+            </>
+          ) : view === 'settings' ? (
+            <>
+              <section className="page-heading">
+                <div><div className="eyebrow">YOUR WORKSPACE</div><h1>Settings</h1><p>Data controls, sign-in preferences, and account management.</p></div>
+                <button className="secondary-button" onClick={() => setView('overview')}>Back to dashboard</button>
+              </section>
+              <section className="settings-layout">
+                <article className="panel settings-panel">
+                  <div className="widget-heading"><div><h2>Data</h2><p>Export what you have or reset sample content.</p></div></div>
+                  <div className="settings-row">
+                    <div><strong>Export applications</strong><span>Download every application in your workspace as a JSON file.</span></div>
+                    <button className="secondary-button" disabled={applications.length === 0} onClick={() => {
+                      const payload = { exportedAt: new Date().toISOString(), user: authUser.email, count: applications.length, applications }
+                      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+                      const url = URL.createObjectURL(blob)
+                      const anchor = window.document.createElement('a')
+                      anchor.href = url
+                      anchor.download = `fieldnote-applications-${new Date().toISOString().slice(0, 10)}.json`
+                      anchor.click()
+                      URL.revokeObjectURL(url)
+                      setNotice(`Exported ${applications.length} applications`)
+                    }}><FileText size={14} />Export {applications.length} applications</button>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Export document metadata</strong><span>Labels, filenames, and sizes for every uploaded document. The file contents themselves are not included.</span></div>
+                    <button className="secondary-button" disabled={documents.length === 0} onClick={() => {
+                      const payload = { exportedAt: new Date().toISOString(), user: authUser.email, count: documents.length, documents }
+                      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+                      const url = URL.createObjectURL(blob)
+                      const anchor = window.document.createElement('a')
+                      anchor.href = url
+                      anchor.download = `fieldnote-documents-${new Date().toISOString().slice(0, 10)}.json`
+                      anchor.click()
+                      URL.revokeObjectURL(url)
+                      setNotice(`Exported ${documents.length} document records`)
+                    }}><FileText size={14} />Export {documents.length} records</button>
+                  </div>
+                  <div className="settings-row">
+                    <div><strong>Re-seed sample applications</strong><span>Clear the local flag so the 84 sample applications get added again on your next sign-in (only ones that don't already exist).</span></div>
+                    <button className="secondary-button" onClick={() => {
+                      localStorage.removeItem(`${SAMPLE_SEEDED_PREFIX}${authUser.id}`)
+                      setNotice('Sample seed flag cleared. Sign out and back in to re-seed.')
+                    }}>Clear seed flag</button>
+                  </div>
+                </article>
+
+                <article className="panel settings-panel">
+                  <div className="widget-heading"><div><h2>Sign-in preferences</h2><p>What the sign-in screen remembers on this browser.</p></div></div>
+                  <div className="settings-row">
+                    <div><strong>Saved email addresses</strong><span>{savedEmails.length === 0 ? 'No emails saved on this browser.' : `${savedEmails.length} email${savedEmails.length === 1 ? '' : 's'} suggested on the sign-in screen: ${savedEmails.join(', ')}.`}</span></div>
+                    <button className="secondary-button" disabled={savedEmails.length === 0} onClick={() => {
+                      localStorage.removeItem(SAVED_EMAILS_KEY)
+                      setSavedEmails([])
+                      setNotice('Saved sign-in emails cleared')
+                    }}>Clear saved emails</button>
+                  </div>
+                </article>
+
+                <article className="panel settings-panel">
+                  <div className="widget-heading"><div><h2>Account</h2><p>Shortcuts to profile-level actions.</p></div></div>
+                  <div className="settings-row">
+                    <div><strong>Profile</strong><span>Update display name, change password, sign out.</span></div>
+                    <button className="secondary-button" onClick={() => setView('profile')}>Open profile</button>
+                  </div>
+                  <div className="settings-row settings-row-danger">
+                    <div><strong>Delete account</strong><span>Permanently remove your account and all associated data. Backend endpoint not implemented yet.</span></div>
+                    <button className="danger-button" disabled>Coming soon</button>
+                  </div>
+                </article>
               </section>
             </>
           ) : view === 'profile' ? (

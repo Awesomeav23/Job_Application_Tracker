@@ -1090,6 +1090,18 @@
   .profile-action-row { flex-direction: column; align-items: flex-start; }
 }
 
+.settings-layout { display: flex; flex-direction: column; gap: 14px; }
+.settings-panel { padding: 22px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid #eef0f7; }
+.settings-row:last-child { border-bottom: 0; }
+.settings-row strong { display: block; color: #1e2a4d; font-size: 13px; }
+.settings-row span { display: block; margin-top: 3px; color: #6d7692; font-size: 12px; line-height: 1.5; }
+.settings-row-danger strong { color: #82322b; }
+
+@media (max-width: 760px) {
+  .settings-row { flex-direction: column; align-items: flex-start; }
+}
+
 @media (max-width: 760px) {
   .auth-screen { display: block; min-height: 100vh; background: #f5f6fa; }
   .auth-brand-panel { display: none; }
