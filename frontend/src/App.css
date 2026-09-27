@@ -495,7 +495,9 @@
 .table-footer button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 0; border: 0; background: transparent; color: #557963; cursor: pointer; font: 600 10px var(--body); }
 
 .modal-backdrop { position: fixed; z-index: 5; inset: 0; display: grid; overflow-y: auto; place-items: center; padding: 18px; background: #14271f99; backdrop-filter: blur(3px); }
-.application-modal,.confirm-modal { width: min(100%, 620px); max-height: min(92vh, 840px); overflow: auto; padding: 22px 24px 18px; border: 1px solid #e2e7df; border-radius: 8px; background: #fbfcf8; box-shadow: 0 18px 70px #10251b40; }
+.application-modal,.confirm-modal,.profile-modal { width: min(100%, 620px); max-height: min(92vh, 840px); overflow: auto; padding: 22px 24px 18px; border: 1px solid #e2e7df; border-radius: 8px; background: #fbfcf8; box-shadow: 0 18px 70px #10251b40; }
+.profile-modal { width: min(100%, 480px); }
+.profile-form { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 0; }
 .modal-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; }
 .modal-heading .eyebrow { margin-bottom: 6px; }
 .modal-heading h2,.confirm-modal h2 { margin: 0; color: var(--pine); font-family: var(--display); font-size: 25px; font-weight: 600; letter-spacing: 0; }

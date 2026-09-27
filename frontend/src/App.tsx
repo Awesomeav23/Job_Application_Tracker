@@ -404,6 +404,14 @@ function App() {
   const [documentBusyId, setDocumentBusyId] = useState<string | null>(null)
   const [documentDeleteTarget, setDocumentDeleteTarget] = useState<AppDocument | null>(null)
   const [accountMenu, setAccountMenu] = useState<'sidebar' | 'topbar' | null>(null)
+  const [displayNameModalOpen, setDisplayNameModalOpen] = useState(false)
+  const [displayNameDraft, setDisplayNameDraft] = useState('')
+  const [displayNameSaving, setDisplayNameSaving] = useState(false)
+  const [displayNameError, setDisplayNameError] = useState('')
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false)
+  const [passwordFields, setPasswordFields] = useState({ current: '', next: '', confirm: '' })
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null)
   const [activity, setActivity] = useState<ActivityBucket[]>([])
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false)
@@ -721,6 +729,68 @@ function App() {
     const randomValues = crypto.getRandomValues(new Uint32Array(20))
     const password = Array.from(randomValues, (value) => characters[value % characters.length]).join('')
     setAuthFields((current) => ({ ...current, password }))
+  }
+
+  function openDisplayNameModal() {
+    setDisplayNameDraft(authUser?.displayName ?? '')
+    setDisplayNameError('')
+    setDisplayNameModalOpen(true)
+  }
+
+  async function submitDisplayName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setDisplayNameSaving(true)
+    setDisplayNameError('')
+    try {
+      const trimmed = displayNameDraft.trim()
+      const updated = await apiFetch<AuthUser>('/auth/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ displayName: trimmed || null }),
+      })
+      setAuthUser(updated)
+      setDisplayNameModalOpen(false)
+      setNotice('Display name updated')
+    } catch (error) {
+      setDisplayNameError(applicationErrorMessage(error, 'Unable to update display name.'))
+    } finally {
+      setDisplayNameSaving(false)
+    }
+  }
+
+  function openPasswordModal() {
+    setPasswordFields({ current: '', next: '', confirm: '' })
+    setPasswordError('')
+    setPasswordModalOpen(true)
+  }
+
+  async function submitPasswordChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (passwordFields.next !== passwordFields.confirm) {
+      setPasswordError('New password and confirmation do not match.')
+      return
+    }
+    if (passwordFields.next.length < 8) {
+      setPasswordError('New password must be at least 8 characters.')
+      return
+    }
+    setPasswordSaving(true)
+    setPasswordError('')
+    try {
+      await apiFetch<null>('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: passwordFields.current,
+          newPassword: passwordFields.next,
+        }),
+      })
+      setPasswordModalOpen(false)
+      setPasswordFields({ current: '', next: '', confirm: '' })
+      setNotice('Password updated')
+    } catch (error) {
+      setPasswordError(applicationErrorMessage(error, 'Unable to change password.'))
+    } finally {
+      setPasswordSaving(false)
+    }
   }
 
   function signOut() {
@@ -1205,13 +1275,13 @@ function App() {
                     <div><strong>Sign out</strong><span>End this browser session. You'll need to sign in again next time.</span></div>
                     <button className="danger-button" onClick={signOut}><LogOut size={14} />Sign out</button>
                   </div>
-                  <div className="profile-action-row profile-action-muted">
-                    <div><strong>Change password</strong><span>Available in a later milestone.</span></div>
-                    <button className="secondary-button" disabled>Coming soon</button>
+                  <div className="profile-action-row">
+                    <div><strong>Change password</strong><span>Update the password used to sign in to Fieldnote.</span></div>
+                    <button className="secondary-button" onClick={openPasswordModal}><KeyRound size={14} />Change password</button>
                   </div>
-                  <div className="profile-action-row profile-action-muted">
-                    <div><strong>Update display name</strong><span>Available in a later milestone.</span></div>
-                    <button className="secondary-button" disabled>Coming soon</button>
+                  <div className="profile-action-row">
+                    <div><strong>Update display name</strong><span>{authUser.displayName ? `Currently "${authUser.displayName}".` : 'No display name set yet.'}</span></div>
+                    <button className="secondary-button" onClick={openDisplayNameModal}><Pencil size={14} />Update name</button>
                   </div>
                 </article>
               </section>
@@ -1476,6 +1546,46 @@ function App() {
           <section className="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-copy">
             <span className="confirm-icon"><Trash2 size={19} /></span><h2 id="delete-title">Delete this application?</h2><p id="delete-copy">{deleteTarget.jobTitle} at {deleteTarget.company} will be removed from this list.</p>
             <div className="confirm-actions"><button className="secondary-button" onClick={() => setDeleteTarget(null)}>Keep it</button><button className="danger-button" onClick={confirmDelete}>Delete application</button></div>
+          </section>
+        </div>
+      )}
+
+      {displayNameModalOpen && (
+        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDisplayNameModalOpen(false) }}>
+          <section className="profile-modal" role="dialog" aria-modal="true" aria-labelledby="display-name-title">
+            <div className="modal-heading"><div><div className="eyebrow">YOUR ACCOUNT</div><h2 id="display-name-title">Update display name</h2></div><button className="icon-button modal-close" aria-label="Close" onClick={() => setDisplayNameModalOpen(false)}><X size={18} /></button></div>
+            <form onSubmit={submitDisplayName} className="profile-form">
+              {displayNameError && <div className="api-error-banner" role="alert">{displayNameError}<button type="button" aria-label="Dismiss error" onClick={() => setDisplayNameError('')}><X size={14} /></button></div>}
+              <label className="form-field form-wide">
+                <span>Display name <small>Leave blank to clear</small></span>
+                <input autoFocus maxLength={100} value={displayNameDraft} onChange={(event) => setDisplayNameDraft(event.target.value)} placeholder="How should we address you?" />
+              </label>
+              <div className="modal-actions"><span /><div><button type="button" className="secondary-button" onClick={() => setDisplayNameModalOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={displayNameSaving}><Check size={16} />{displayNameSaving ? 'Saving…' : 'Save name'}</button></div></div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {passwordModalOpen && (
+        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setPasswordModalOpen(false) }}>
+          <section className="profile-modal" role="dialog" aria-modal="true" aria-labelledby="password-title">
+            <div className="modal-heading"><div><div className="eyebrow">YOUR ACCOUNT</div><h2 id="password-title">Change password</h2></div><button className="icon-button modal-close" aria-label="Close" onClick={() => setPasswordModalOpen(false)}><X size={18} /></button></div>
+            <form onSubmit={submitPasswordChange} className="profile-form">
+              {passwordError && <div className="api-error-banner" role="alert">{passwordError}<button type="button" aria-label="Dismiss error" onClick={() => setPasswordError('')}><X size={14} /></button></div>}
+              <label className="form-field form-wide">
+                <span>Current password <b>*</b></span>
+                <input required type="password" autoComplete="current-password" value={passwordFields.current} onChange={(event) => setPasswordFields({ ...passwordFields, current: event.target.value })} />
+              </label>
+              <label className="form-field form-wide">
+                <span>New password <b>*</b> <small>At least 8 characters</small></span>
+                <input required type="password" minLength={8} autoComplete="new-password" value={passwordFields.next} onChange={(event) => setPasswordFields({ ...passwordFields, next: event.target.value })} />
+              </label>
+              <label className="form-field form-wide">
+                <span>Confirm new password <b>*</b></span>
+                <input required type="password" minLength={8} autoComplete="new-password" value={passwordFields.confirm} onChange={(event) => setPasswordFields({ ...passwordFields, confirm: event.target.value })} />
+              </label>
+              <div className="modal-actions"><span /><div><button type="button" className="secondary-button" onClick={() => setPasswordModalOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={passwordSaving}><Check size={16} />{passwordSaving ? 'Updating…' : 'Update password'}</button></div></div>
+            </form>
           </section>
         </div>
       )}

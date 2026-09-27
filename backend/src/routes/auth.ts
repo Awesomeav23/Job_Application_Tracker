@@ -124,4 +124,81 @@ router.get('/me', requireAuth, async (req, res) => {
   return res.json(user);
 });
 
+// Update the current user's profile (display name only for now).
+const updateProfileSchema = z.object({
+  displayName: z.string().max(100).nullable().optional(),
+});
+
+router.patch('/me', requireAuth, async (req, res) => {
+  const parsed = updateProfileSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    const fields: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.join('.') || 'body';
+      fields[path] = issue.message;
+    }
+    return sendValidationError(res, fields);
+  }
+
+  const { displayName } = parsed.data;
+  const normalized = displayName === undefined
+    ? undefined
+    : displayName === null
+      ? null
+      : displayName.trim() || null;
+
+  const user = await prisma.user.update({
+    where: { id: req.user.id },
+    data: normalized === undefined ? {} : { displayName: normalized },
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      createdAt: true,
+    },
+  });
+
+  return res.json(user);
+});
+
+// Change the current user's password. Requires the current password.
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+router.post('/change-password', requireAuth, async (req, res) => {
+  const parsed = changePasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    const fields: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.join('.') || 'body';
+      fields[path] = issue.message;
+    }
+    return sendValidationError(res, fields);
+  }
+
+  const { currentPassword, newPassword } = parsed.data;
+
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  if (!user) {
+    return sendUnauthorized(res, 'User not found');
+  }
+
+  const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!isValid) {
+    return sendUnauthorized(res, 'Current password is incorrect');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash },
+  });
+
+  return res.status(204).send();
+});
+
 export default router;
