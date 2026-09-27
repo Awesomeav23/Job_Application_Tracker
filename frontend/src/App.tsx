@@ -10,6 +10,8 @@ import {
   FileUp,
   KeyRound,
   LayoutDashboard,
+  LogOut,
+  Mail,
   MapPin,
   MoreHorizontal,
   Pencil,
@@ -20,13 +22,14 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  UserRound,
   X,
 } from 'lucide-react'
 import './App.css'
 import { ApiError, apiFetch, authenticate, clearSession, getCurrentUser, hasSession, type AuthUser } from './lib/api'
 
 type Status = 'SAVED' | 'APPLIED' | 'RECRUITER_SCREEN' | 'INTERVIEW' | 'OFFER' | 'REJECTED' | 'WITHDRAWN'
-type View = 'overview' | 'board' | 'applications' | 'stats' | 'documents'
+type View = 'overview' | 'board' | 'applications' | 'stats' | 'documents' | 'profile'
 type DocumentKind = 'RESUME' | 'COVER_LETTER'
 
 interface DocumentAttachment {
@@ -109,6 +112,44 @@ interface ActivityResponse {
   bucket: 'day' | 'week'
   series: ActivityBucket[]
 }
+
+interface AnalysisDocumentRef {
+  id: string
+  label: string
+}
+
+interface Analysis {
+  id: string
+  applicationId: string
+  document: AnalysisDocumentRef | null
+  matchScore: number
+  summary: string
+  strengths: string[]
+  missingSkills: string[]
+  relevantExperience: string[]
+  provider: string
+  modelId: string
+  createdAt: string
+}
+
+interface AnalysisListResponse {
+  items: Analysis[]
+}
+
+interface InterviewQuestionSet {
+  id: string
+  applicationId: string
+  questions: string[]
+  provider: string
+  modelId: string
+  createdAt: string
+}
+
+interface InterviewQuestionListResponse {
+  items: InterviewQuestionSet[]
+}
+
+type ApplicationModalTab = 'details' | 'ai'
 
 const statuses: Status[] = ['SAVED', 'APPLIED', 'RECRUITER_SCREEN', 'INTERVIEW', 'OFFER', 'REJECTED', 'WITHDRAWN']
 const sources = ['MANUAL', 'EXTENSION'] as const
@@ -362,9 +403,19 @@ function App() {
   const [renameValue, setRenameValue] = useState('')
   const [documentBusyId, setDocumentBusyId] = useState<string | null>(null)
   const [documentDeleteTarget, setDocumentDeleteTarget] = useState<AppDocument | null>(null)
+  const [accountMenu, setAccountMenu] = useState<'sidebar' | 'topbar' | null>(null)
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null)
   const [activity, setActivity] = useState<ActivityBucket[]>([])
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false)
+  const [modalTab, setModalTab] = useState<ApplicationModalTab>('details')
+  const [analyses, setAnalyses] = useState<Analysis[]>([])
+  const [analysesLoaded, setAnalysesLoaded] = useState(false)
+  const [analysisError, setAnalysisError] = useState('')
+  const [analysisRunning, setAnalysisRunning] = useState(false)
+  const [questionSets, setQuestionSets] = useState<InterviewQuestionSet[]>([])
+  const [questionsLoaded, setQuestionsLoaded] = useState(false)
+  const [questionsError, setQuestionsError] = useState('')
+  const [questionsRunning, setQuestionsRunning] = useState(false)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [formOpen, setFormOpen] = useState(false)
@@ -648,6 +699,13 @@ function App() {
       setAnalytics(null)
       setActivity([])
       setAnalyticsLoaded(false)
+      setAnalyses([])
+      setAnalysesLoaded(false)
+      setAnalysisError('')
+      setQuestionSets([])
+      setQuestionsLoaded(false)
+      setQuestionsError('')
+      setModalTab('details')
       setAuthUser(user)
       setApplications([])
       setNotice('')
@@ -686,6 +744,13 @@ function App() {
     setAnalytics(null)
     setActivity([])
     setAnalyticsLoaded(false)
+    setAnalyses([])
+    setAnalysesLoaded(false)
+    setAnalysisError('')
+    setQuestionSets([])
+    setQuestionsLoaded(false)
+    setQuestionsError('')
+    setModalTab('details')
     setView('overview')
     setNotice('')
   }
@@ -732,10 +797,21 @@ function App() {
     )
   }
 
+  function resetAiState() {
+    setAnalyses([])
+    setAnalysesLoaded(false)
+    setAnalysisError('')
+    setQuestionSets([])
+    setQuestionsLoaded(false)
+    setQuestionsError('')
+  }
+
   function openCreateForm() {
     setEditing(null)
     setApplicationError('')
     setDraft({ ...emptyDraft, dateApplied: new Date().toISOString().slice(0, 10) })
+    setModalTab('details')
+    resetAiState()
     setFormOpen(true)
   }
 
@@ -743,7 +819,58 @@ function App() {
     setEditing(application)
     setApplicationError('')
     setDraft({ ...application })
+    setModalTab('details')
+    resetAiState()
     setFormOpen(true)
+    void loadAiForApplication(application.id)
+  }
+
+  async function loadAiForApplication(applicationId: string) {
+    try {
+      const [analysisResponse, questionResponse] = await Promise.all([
+        apiFetch<AnalysisListResponse>(`/applications/${applicationId}/analyses`),
+        apiFetch<InterviewQuestionListResponse>(`/applications/${applicationId}/interview-questions`),
+      ])
+      setAnalyses(analysisResponse.items)
+      setQuestionSets(questionResponse.items)
+    } catch (error) {
+      const message = applicationErrorMessage(error, 'Unable to load AI history.')
+      setAnalysisError(message)
+      setQuestionsError(message)
+    } finally {
+      setAnalysesLoaded(true)
+      setQuestionsLoaded(true)
+    }
+  }
+
+  async function runAnalysis() {
+    if (!editing) return
+    setAnalysisRunning(true)
+    setAnalysisError('')
+    try {
+      const analysis = await apiFetch<Analysis>(`/applications/${editing.id}/analyze`, { method: 'POST' })
+      setAnalyses((current) => [analysis, ...current])
+      setNotice('Analysis complete')
+    } catch (error) {
+      setAnalysisError(applicationErrorMessage(error, 'Unable to run analysis.'))
+    } finally {
+      setAnalysisRunning(false)
+    }
+  }
+
+  async function generateInterviewQuestions() {
+    if (!editing) return
+    setQuestionsRunning(true)
+    setQuestionsError('')
+    try {
+      const set = await apiFetch<InterviewQuestionSet>(`/applications/${editing.id}/interview-questions`, { method: 'POST' })
+      setQuestionSets((current) => [set, ...current])
+      setNotice('Interview questions generated')
+    } catch (error) {
+      setQuestionsError(applicationErrorMessage(error, 'Unable to generate questions.'))
+    } finally {
+      setQuestionsRunning(false)
+    }
   }
 
   async function saveApplication(event: FormEvent<HTMLFormElement>) {
@@ -848,14 +975,70 @@ function App() {
         <div className="sidebar-bottom">
           <button className="nav-link muted-link" onClick={() => setNotice('Settings will be available in a later milestone.')}><Settings2 size={17} />Settings</button>
           <button className="nav-link muted-link" onClick={() => setNotice('Help will be available in a later milestone.')}><CircleHelp size={17} />Help</button>
-          <button className="user-chip" onClick={signOut} title="Sign out"><span className="avatar">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</span><span><strong>{authUser.displayName || authUser.email}</strong><small>Sign out</small></span><MoreHorizontal size={16} /></button>
+          <div
+            className="account-anchor sidebar-account"
+            onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setAccountMenu((current) => current === 'sidebar' ? null : current) }}
+          >
+            <button
+              className="user-chip"
+              aria-haspopup="menu"
+              aria-expanded={accountMenu === 'sidebar'}
+              onClick={() => setAccountMenu((current) => current === 'sidebar' ? null : 'sidebar')}
+            >
+              <span className="avatar">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</span>
+              <span><strong>{authUser.displayName || authUser.email}</strong><small>{authUser.email}</small></span>
+              <ChevronDown size={14} aria-hidden="true" />
+            </button>
+            {accountMenu === 'sidebar' && (
+              <div className="account-menu-panel account-menu-panel-up" role="menu">
+                <div className="account-menu-heading">
+                  <span className="avatar avatar-sm">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</span>
+                  <div><strong>{authUser.displayName || 'No display name'}</strong><small>{authUser.email}</small></div>
+                </div>
+                <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setView('profile') }}><UserRound size={14} />View profile</button>
+                <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setNotice('Settings will be available in a later milestone.') }}><Settings2 size={14} />Settings</button>
+                <div className="account-menu-divider" />
+                <button role="menuitem" className="account-menu-item danger" onClick={() => { setAccountMenu(null); signOut() }}><LogOut size={14} />Sign out</button>
+              </div>
+            )}
+          </div>
         </div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><span className="crumb-separator">/</span><strong>{view === 'overview' ? 'Dashboard' : view === 'board' ? 'Board' : view === 'stats' ? 'Stats' : view === 'documents' ? 'Documents' : 'Applications'}</strong></div>
-          <div className="topbar-actions"><span className="today-label"><CalendarDays size={14} />Friday, September 25</span><button className="help-button" aria-label="Help" title="Help"><CircleHelp size={18} /></button><button className="account-menu" onClick={signOut} title="Sign out"><span className="top-avatar">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</span><span>{authUser.displayName || authUser.email}</span><span className="signout-label">Sign out</span></button></div>
+          <div className="breadcrumb"><span>Workspace</span><span className="crumb-separator">/</span><strong>{view === 'overview' ? 'Dashboard' : view === 'board' ? 'Board' : view === 'stats' ? 'Stats' : view === 'documents' ? 'Documents' : view === 'profile' ? 'Profile' : 'Applications'}</strong></div>
+          <div className="topbar-actions">
+            <span className="today-label"><CalendarDays size={14} />Friday, September 25</span>
+            <button className="help-button" aria-label="Help" title="Help"><CircleHelp size={18} /></button>
+            <div
+              className="account-anchor topbar-account"
+              onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setAccountMenu((current) => current === 'topbar' ? null : current) }}
+            >
+              <button
+                className="account-menu"
+                aria-haspopup="menu"
+                aria-expanded={accountMenu === 'topbar'}
+                onClick={() => setAccountMenu((current) => current === 'topbar' ? null : 'topbar')}
+              >
+                <span className="top-avatar">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</span>
+                <span>{authUser.displayName || authUser.email}</span>
+                <ChevronDown size={14} aria-hidden="true" />
+              </button>
+              {accountMenu === 'topbar' && (
+                <div className="account-menu-panel account-menu-panel-down" role="menu">
+                  <div className="account-menu-heading">
+                    <span className="avatar avatar-sm">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</span>
+                    <div><strong>{authUser.displayName || 'No display name'}</strong><small>{authUser.email}</small></div>
+                  </div>
+                  <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setView('profile') }}><UserRound size={14} />View profile</button>
+                  <button role="menuitem" className="account-menu-item" onClick={() => { setAccountMenu(null); setNotice('Settings will be available in a later milestone.') }}><Settings2 size={14} />Settings</button>
+                  <div className="account-menu-divider" />
+                  <button role="menuitem" className="account-menu-item danger" onClick={() => { setAccountMenu(null); signOut() }}><LogOut size={14} />Sign out</button>
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
         <div className="page-content">
@@ -992,6 +1175,47 @@ function App() {
                 </div>
               </section>
             </>
+          ) : view === 'profile' ? (
+            <>
+              <section className="page-heading">
+                <div><div className="eyebrow">YOUR ACCOUNT</div><h1>Profile</h1><p>Account details and session summary.</p></div>
+                <button className="secondary-button" onClick={() => setView('overview')}>Back to dashboard</button>
+              </section>
+              <section className="profile-layout">
+                <article className="panel profile-identity">
+                  <div className="profile-avatar">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</div>
+                  <div className="profile-identity-copy">
+                    <strong>{authUser.displayName || 'No display name set'}</strong>
+                    <span><Mail size={13} />{authUser.email}</span>
+                    <small>Member since {new Date(authUser.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</small>
+                  </div>
+                </article>
+                <article className="panel profile-summary">
+                  <div className="widget-heading"><div><h2>At a glance</h2><p>Your activity in this workspace.</p></div></div>
+                  <div className="profile-stats">
+                    <div><span>Applications</span><strong>{applications.length}</strong></div>
+                    <div><span>Interviews</span><strong>{interviews}</strong></div>
+                    <div><span>Offers</span><strong>{offers}</strong></div>
+                    <div><span>Documents</span><strong>{documents.length}</strong></div>
+                  </div>
+                </article>
+                <article className="panel profile-actions">
+                  <div className="widget-heading"><div><h2>Account actions</h2><p>Manage your session.</p></div></div>
+                  <div className="profile-action-row">
+                    <div><strong>Sign out</strong><span>End this browser session. You'll need to sign in again next time.</span></div>
+                    <button className="danger-button" onClick={signOut}><LogOut size={14} />Sign out</button>
+                  </div>
+                  <div className="profile-action-row profile-action-muted">
+                    <div><strong>Change password</strong><span>Available in a later milestone.</span></div>
+                    <button className="secondary-button" disabled>Coming soon</button>
+                  </div>
+                  <div className="profile-action-row profile-action-muted">
+                    <div><strong>Update display name</strong><span>Available in a later milestone.</span></div>
+                    <button className="secondary-button" disabled>Coming soon</button>
+                  </div>
+                </article>
+              </section>
+            </>
           ) : view === 'documents' ? (
             <>
               <section className="page-heading">
@@ -1031,6 +1255,7 @@ function App() {
                       <span>File <b>*</b> <small>PDF, DOCX, TXT · up to 5 MB</small></span>
                       <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} />
                       {uploadFile && <small className="documents-file-name">{uploadFile.name} · {formatBytes(uploadFile.size)}</small>}
+                      {documentTab === 'RESUME' && <small className="form-hint">Upload a plain-text (.txt) resume to enable AI job/resume analysis. PDF/DOCX are stored but not yet parsed for AI.</small>}
                     </label>
                   </div>
                   <div className="documents-upload-actions">
@@ -1102,6 +1327,108 @@ function App() {
         <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormOpen(false) }}>
           <section className="application-modal" role="dialog" aria-modal="true" aria-labelledby="form-title">
             <div className="modal-heading"><div><div className="eyebrow">APPLICATION DETAILS</div><h2 id="form-title">{editing ? 'Update application' : 'Add an application'}</h2></div><button className="icon-button modal-close" aria-label="Close form" onClick={() => setFormOpen(false)}><X size={18} /></button></div>
+            {editing && (
+              <div className="modal-tabs" role="tablist" aria-label="Application sections">
+                <button type="button" role="tab" aria-selected={modalTab === 'details'} className={modalTab === 'details' ? 'modal-tab active' : 'modal-tab'} onClick={() => setModalTab('details')}>Details</button>
+                <button type="button" role="tab" aria-selected={modalTab === 'ai'} className={modalTab === 'ai' ? 'modal-tab active' : 'modal-tab'} onClick={() => setModalTab('ai')}><Sparkles size={13} />AI insights</button>
+              </div>
+            )}
+            {editing && modalTab === 'ai' ? (
+              <div className="modal-body ai-body">
+                <section className="ai-section">
+                  <div className="ai-section-heading">
+                    <div>
+                      <h3>Job / resume match</h3>
+                      <p>Score this application against the attached resume.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={runAnalysis}
+                      disabled={!editing.resumeId || analysisRunning}
+                      title={!editing.resumeId ? 'Attach a resume in the Details tab first.' : undefined}
+                    >
+                      <Sparkles size={14} />
+                      {analysisRunning ? 'Analyzing…' : 'Run analysis'}
+                    </button>
+                  </div>
+                  {!editing.resumeId && <div className="ai-hint">Attach a resume in the Details tab to enable analysis.</div>}
+                  {analysisError && <div className="api-error-banner" role="alert">{analysisError}<button type="button" aria-label="Dismiss error" onClick={() => setAnalysisError('')}><X size={14} /></button></div>}
+                  {!analysesLoaded ? (
+                    <div className="api-loading-table">Loading analyses…</div>
+                  ) : analyses.length === 0 ? (
+                    <div className="empty-state"><Sparkles size={22} /><strong>No analyses yet</strong><span>Run one to see a match score, strengths, and gaps.</span></div>
+                  ) : (
+                    <ul className="ai-history">
+                      {analyses.map((analysis) => (
+                        <li className="ai-card" key={analysis.id}>
+                          <div className="ai-card-heading">
+                            <div>
+                              <div className="ai-card-score" data-tone={analysis.matchScore >= 70 ? 'high' : analysis.matchScore >= 40 ? 'mid' : 'low'}>
+                                <strong>{analysis.matchScore}</strong><small>/ 100 match</small>
+                              </div>
+                              <div className="ai-card-meta">
+                                Resume: <strong>{analysis.document?.label ?? '(deleted)'}</strong>
+                                <span className="ai-card-dot">·</span>
+                                {new Date(analysis.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                <span className="ai-card-dot">·</span>
+                                {analysis.provider} {analysis.modelId}
+                              </div>
+                            </div>
+                          </div>
+                          <p className="ai-card-summary">{analysis.summary}</p>
+                          <div className="ai-card-lists">
+                            <div>
+                              <span className="ai-card-list-label">Strengths</span>
+                              <ul>{analysis.strengths.map((item) => <li key={item}>{item}</li>)}</ul>
+                            </div>
+                            <div>
+                              <span className="ai-card-list-label">Missing skills</span>
+                              <ul>{analysis.missingSkills.map((item) => <li key={item}>{item}</li>)}</ul>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="ai-section">
+                  <div className="ai-section-heading">
+                    <div>
+                      <h3>Interview questions</h3>
+                      <p>Generated from the job description.</p>
+                    </div>
+                    <button type="button" className="primary-button" onClick={generateInterviewQuestions} disabled={questionsRunning}>
+                      <Sparkles size={14} />
+                      {questionsRunning ? 'Generating…' : 'Generate questions'}
+                    </button>
+                  </div>
+                  {questionsError && <div className="api-error-banner" role="alert">{questionsError}<button type="button" aria-label="Dismiss error" onClick={() => setQuestionsError('')}><X size={14} /></button></div>}
+                  {!questionsLoaded ? (
+                    <div className="api-loading-table">Loading questions…</div>
+                  ) : questionSets.length === 0 ? (
+                    <div className="empty-state"><Sparkles size={22} /><strong>No question sets yet</strong><span>Generate a set to prepare for the next conversation.</span></div>
+                  ) : (
+                    <ul className="ai-history">
+                      {questionSets.map((set) => (
+                        <li className="ai-card" key={set.id}>
+                          <div className="ai-card-meta">
+                            {new Date(set.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            <span className="ai-card-dot">·</span>
+                            {set.provider} {set.modelId}
+                          </div>
+                          <ol className="ai-question-list">
+                            {set.questions.map((question, index) => <li key={index}>{question}</li>)}
+                          </ol>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+                <div className="modal-actions"><span /><div><button type="button" className="secondary-button" onClick={() => setFormOpen(false)}>Close</button></div></div>
+              </div>
+            ) : (
             <form onSubmit={saveApplication}>
               {applicationError && <div className="api-error-banner" role="alert">{applicationError}<button type="button" aria-label="Dismiss error" onClick={() => setApplicationError('')}><X size={14} /></button></div>}
               <div className="form-grid">
@@ -1139,6 +1466,7 @@ function App() {
               </div>
               <div className="modal-actions"><span><b>*</b> Required fields</span><div><button type="button" className="secondary-button" onClick={() => setFormOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={applicationSaving}><Check size={16} />{applicationSaving ? 'Saving…' : editing ? 'Save changes' : 'Save application'}</button></div></div>
             </form>
+            )}
           </section>
         </div>
       )}
