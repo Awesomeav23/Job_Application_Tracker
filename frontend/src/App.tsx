@@ -1079,7 +1079,7 @@ function App() {
         <header className="topbar">
           <div className="breadcrumb"><span>Workspace</span><span className="crumb-separator">/</span><strong>{view === 'overview' ? 'Dashboard' : view === 'board' ? 'Board' : view === 'stats' ? 'Stats' : view === 'documents' ? 'Documents' : view === 'profile' ? 'Profile' : view === 'settings' ? 'Settings' : 'Applications'}</strong></div>
           <div className="topbar-actions">
-            <span className="today-label"><CalendarDays size={14} />Friday, September 25</span>
+            <span className="today-label"><CalendarDays size={14} />{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
             <button className="help-button" aria-label="Help" title="Help"><CircleHelp size={18} /></button>
             <div
               className="account-anchor topbar-account"

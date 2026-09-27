@@ -1,7 +1,7 @@
 # Requirements & Traceability
 
 **Project:** AI Job Application Tracker
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-27
 **Companion to:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
 This document is the single source of truth for *what the system must do*. Every requirement has an ID, acceptance criteria, and a target milestone. Phase 17 acceptance testing reads directly from the status table below.
@@ -16,35 +16,37 @@ Legend: `Not started` · `In progress` · `Implemented` · `Tested` · `PASS` / 
 
 ### MVP scope
 
+Status legend: `Tested` = backend test asserts the behaviour · `Implemented` = code exists (backend + frontend) but no automated test for this specific ID · `Not started` = missing.
+
 | ID | Requirement | Milestone | Test ref | Status |
 | --- | --- | --- | --- | --- |
-| AUTH-001 | Create account with email + password | M5 | — | Not started |
-| AUTH-002 | Log in | M5 | — | Not started |
-| AUTH-003 | Block unauthenticated access to private data | M5 | — | Not started |
-| APP-001 | Create job application | M4 | — | Not started |
-| APP-002 | Edit application | M4 | — | Not started |
-| APP-003 | Delete application | M4 | — | Not started |
-| APP-004 | Change application status | M4 | — | Not started |
-| APP-005 | Search applications | M4 | — | Not started |
-| APP-006 | Filter applications by status | M4 | — | Not started |
-| RES-001 | Upload multiple resumes | M6 | — | Not started |
-| RES-002 | Name / version resumes | M6 | — | Not started |
-| RES-003 | Associate a resume with an application | M6 | — | Not started |
-| DOC-001 | Upload cover letters | M6 | — | Not started |
-| DOC-002 | Associate a cover letter with an application | M6 | — | Not started |
-| ANA-001 | Total applications | M7 | — | Not started |
-| ANA-002 | Applications by status | M7 | — | Not started |
-| ANA-003 | Response rate | M7 | — | Not started |
-| ANA-004 | Interview conversion rate | M7 | — | Not started |
-| ANA-005 | Average response time | M7 | — | Not started |
-| ANA-006 | Application activity over time | M7 | — | Not started |
-| AI-001 | Analyze job against associated resume | M8 | — | Not started |
-| AI-002 | Generate interview questions | M8 | — | Not started |
-| AI-003 | Analysis bound to application + resume version | M8 | — | Not started |
-| NFR-001 | Passwords stored only as salted hashes | M5 | — | Not started |
-| NFR-002 | Cross-account data isolation | M5 | — | Not started |
-| NFR-003 | All write endpoints validate input | M4 | — | Not started |
-| NFR-004 | Uploads restricted by type and size | M6 | — | Not started |
+| AUTH-001 | Create account with email + password | M5 | `backend/src/__tests__/auth.test.ts` | Tested |
+| AUTH-002 | Log in | M5 | `backend/src/__tests__/auth.test.ts` | Tested |
+| AUTH-003 | Block unauthenticated access to private data | M5 | `backend/src/__tests__/auth.test.ts` | Tested |
+| APP-001 | Create job application | M4 | `backend/src/__tests__/applications.test.ts` | Tested |
+| APP-002 | Edit application | M4 | `backend/src/__tests__/applications.test.ts` (status-change edit path) | Implemented |
+| APP-003 | Delete application | M4 | `backend/src/__tests__/applications.test.ts` | Tested |
+| APP-004 | Change application status | M4 | `backend/src/__tests__/applications.test.ts` | Tested |
+| APP-005 | Search applications | M4 | — | Implemented |
+| APP-006 | Filter applications by status | M4 | — | Implemented |
+| RES-001 | Upload multiple resumes | M6 | `backend/src/__tests__/documents.test.ts` | Tested |
+| RES-002 | Name / version resumes | M6 | — | Implemented |
+| RES-003 | Associate a resume with an application | M6 | `backend/src/__tests__/documents.test.ts` | Tested |
+| DOC-001 | Upload cover letters | M6 | `backend/src/__tests__/documents.test.ts` (kind guard) | Implemented |
+| DOC-002 | Associate a cover letter with an application | M6 | — | Implemented |
+| ANA-001 | Total applications | M7 | `backend/src/__tests__/analytics.test.ts` | Tested |
+| ANA-002 | Applications by status | M7 | `backend/src/__tests__/analytics.test.ts` | Tested |
+| ANA-003 | Response rate | M7 | `backend/src/__tests__/analytics.test.ts` | Tested |
+| ANA-004 | Interview conversion rate | M7 | — | Implemented |
+| ANA-005 | Average response time | M7 | — | Implemented |
+| ANA-006 | Application activity over time | M7 | `backend/src/__tests__/analytics.test.ts` | Tested |
+| AI-001 | Analyze job against associated resume | M8 | `backend/src/__tests__/ai.test.ts` | Tested |
+| AI-002 | Generate interview questions | M8 | `backend/src/__tests__/ai.test.ts` | Tested |
+| AI-003 | Analysis bound to application + resume version | M8 | — | Implemented |
+| NFR-001 | Passwords stored only as salted hashes | M5 | — | Implemented |
+| NFR-002 | Cross-account data isolation | M5 | `backend/src/__tests__/applications.test.ts` (cross-account denial) | Tested |
+| NFR-003 | All write endpoints validate input | M4 | `backend/src/__tests__/applications.test.ts` (required-field guard) | Tested |
+| NFR-004 | Uploads restricted by type and size | M6 | `backend/src/__tests__/documents.test.ts` (kind rejection) | Tested |
 
 ### Post-MVP scope
 
@@ -57,6 +59,10 @@ Legend: `Not started` · `In progress` · `Implemented` · `Tested` · `PASS` / 
 | EMAIL-002 | Identify job-related emails | M10 | — | Not started |
 | EMAIL-003 | Associate an email with an application | M10 | — | Not started |
 | EMAIL-004 | Suggest a status change | M10 | — | Not started |
+
+### Frontend coverage
+
+Every MVP requirement above has a working UI in [frontend/src/App.tsx](frontend/src/App.tsx). No frontend tests exist yet — that gap is captured in the README under "Explicitly deferred".
 
 ---
 
