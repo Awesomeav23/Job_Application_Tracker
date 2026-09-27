@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import mammoth from 'mammoth';
+import { PDFParse } from 'pdf-parse';
 import { prisma } from '../config/prisma';
 
 const STORAGE_ROOT = path.resolve(process.cwd(), 'uploads');
@@ -30,9 +32,34 @@ function isSupportedMimeType(mimeType: string) {
   return allowed.includes(mimeType) || mimeType.startsWith('text/');
 }
 
-function extractedTextFromBuffer(buffer: Buffer, mimeType: string) {
+const MAX_EXTRACTED_CHARS = 50000;
+
+async function extractedTextFromBuffer(buffer: Buffer, mimeType: string): Promise<string | null> {
   if (mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType.includes('xml')) {
-    return buffer.toString('utf8').slice(0, 50000);
+    return buffer.toString('utf8').slice(0, MAX_EXTRACTED_CHARS);
+  }
+
+  if (mimeType === 'application/pdf') {
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    try {
+      const result = await parser.getText();
+      const text = (result.text ?? '').trim();
+      return text ? text.slice(0, MAX_EXTRACTED_CHARS) : null;
+    } catch {
+      return null;
+    } finally {
+      await parser.destroy().catch(() => undefined);
+    }
+  }
+
+  if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    try {
+      const { value } = await mammoth.extractRawText({ buffer });
+      const text = (value ?? '').trim();
+      return text ? text.slice(0, MAX_EXTRACTED_CHARS) : null;
+    } catch {
+      return null;
+    }
   }
 
   return null;
@@ -110,7 +137,7 @@ export async function createDocument(
       originalFileName: file.originalname || 'document',
       mimeType: file.mimetype,
       sizeBytes: file.size,
-      extractedText: extractedTextFromBuffer(file.buffer, file.mimetype),
+      extractedText: await extractedTextFromBuffer(file.buffer, file.mimetype),
     },
   });
 

@@ -1396,7 +1396,7 @@ function App() {
                       <span>File <b>*</b> <small>PDF, DOCX, TXT · up to 5 MB</small></span>
                       <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} />
                       {uploadFile && <small className="documents-file-name">{uploadFile.name} · {formatBytes(uploadFile.size)}</small>}
-                      {documentTab === 'RESUME' && <small className="form-hint">Upload a plain-text (.txt) resume to enable AI job/resume analysis. PDF/DOCX are stored but not yet parsed for AI.</small>}
+                      {documentTab === 'RESUME' && <small className="form-hint">PDF, DOCX, and plain-text resumes are all parsed for AI job/resume analysis.</small>}
                     </label>
                   </div>
                   <div className="documents-upload-actions">
