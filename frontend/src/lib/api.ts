@@ -50,7 +50,8 @@ export function clearSession() {
 
 async function apiRequest<T>(path: string, init: RequestInit = {}, includeAuth = true): Promise<T> {
   const headers = new Headers(init.headers)
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  const isFormDataBody = typeof FormData !== 'undefined' && init.body instanceof FormData
+  if (init.body && !isFormDataBody && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
 
   const token = includeAuth ? getToken() : null
   if (token) headers.set('Authorization', `Bearer ${token}`)
