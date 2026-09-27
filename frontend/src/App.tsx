@@ -91,6 +91,25 @@ interface DocumentListResponse {
   total: number
 }
 
+interface AnalyticsSummary {
+  totalApplications: number
+  byStatus: Record<Status, number>
+  responseRate: number | null
+  interviewConversionRate: number | null
+  averageResponseDays: number | null
+}
+
+interface ActivityBucket {
+  periodStart: string
+  created: number
+  applied: number
+}
+
+interface ActivityResponse {
+  bucket: 'day' | 'week'
+  series: ActivityBucket[]
+}
+
 const statuses: Status[] = ['SAVED', 'APPLIED', 'RECRUITER_SCREEN', 'INTERVIEW', 'OFFER', 'REJECTED', 'WITHDRAWN']
 const sources = ['MANUAL', 'EXTENSION'] as const
 const SAVED_EMAILS_KEY = 'fieldnote.savedEmails'
@@ -343,6 +362,9 @@ function App() {
   const [renameValue, setRenameValue] = useState('')
   const [documentBusyId, setDocumentBusyId] = useState<string | null>(null)
   const [documentDeleteTarget, setDocumentDeleteTarget] = useState<AppDocument | null>(null)
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null)
+  const [activity, setActivity] = useState<ActivityBucket[]>([])
+  const [analyticsLoaded, setAnalyticsLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [formOpen, setFormOpen] = useState(false)
@@ -359,15 +381,19 @@ function App() {
   const activeApplications = applications.filter((application) => !['REJECTED', 'WITHDRAWN'].includes(application.status))
   const sentApplications = applications.filter((application) => !['SAVED', 'WITHDRAWN'].includes(application.status))
   const repliedApplications = applications.filter((application) => ['RECRUITER_SCREEN', 'INTERVIEW', 'OFFER', 'REJECTED'].includes(application.status))
-  const responseRate = sentApplications.length ? Math.round((repliedApplications.length / sentApplications.length) * 100) : 0
-  const interviews = applications.filter((application) => application.status === 'INTERVIEW').length
-  const offers = applications.filter((application) => application.status === 'OFFER').length
-  const needsChasing = applications.filter((application) => application.status === 'APPLIED').length
+  const responseRate = analytics?.responseRate != null
+    ? Math.round(analytics.responseRate * 100)
+    : (sentApplications.length ? Math.round((repliedApplications.length / sentApplications.length) * 100) : 0)
+  const interviews = analytics?.byStatus?.INTERVIEW ?? applications.filter((application) => application.status === 'INTERVIEW').length
+  const offers = analytics?.byStatus?.OFFER ?? applications.filter((application) => application.status === 'OFFER').length
+  const needsChasing = analytics?.byStatus?.APPLIED ?? applications.filter((application) => application.status === 'APPLIED').length
   const statusCounts = statuses.map((status) => ({
     status,
-    count: applications.filter((application) => application.status === status).length,
+    count: analytics?.byStatus?.[status] ?? applications.filter((application) => application.status === status).length,
   }))
   const maxStatusCount = Math.max(1, ...statusCounts.map((item) => item.count))
+  const averageResponseDays = analytics?.averageResponseDays ?? null
+  const interviewConversionRate = analytics?.interviewConversionRate ?? null
   const sourceCounts = sources.map((source) => ({
     source,
     count: applications.filter((application) => application.source === source).length,
@@ -433,6 +459,7 @@ function App() {
         }
         localStorage.setItem(seedKey, 'true')
         setNotice(`${missingSamples.length} sample applications were added so you can explore the tracker. You can edit or delete them anytime.`)
+        void refreshAnalytics()
       } catch (error) {
         if (!cancelled) {
           const latestApplications = await apiFetch<ApiApplication[]>('/applications').catch(() => [])
@@ -464,10 +491,31 @@ function App() {
     return () => { cancelled = true }
   }, [authUser])
 
+  useEffect(() => {
+    if (!authUser) return
+    void refreshAnalytics()
+  }, [authUser])
+
   const visibleDocuments = useMemo(() => documents.filter((document) => document.kind === documentTab), [documents, documentTab])
   const documentsLoading = Boolean(authUser) && !documentsLoaded
   const resumeOptions = useMemo(() => documents.filter((document) => document.kind === 'RESUME'), [documents])
   const coverLetterOptions = useMemo(() => documents.filter((document) => document.kind === 'COVER_LETTER'), [documents])
+  const analyticsLoading = Boolean(authUser) && !analyticsLoaded
+
+  async function refreshAnalytics() {
+    try {
+      const [summary, activityResponse] = await Promise.all([
+        apiFetch<AnalyticsSummary>('/analytics'),
+        apiFetch<ActivityResponse>('/analytics/activity?bucket=week'),
+      ])
+      setAnalytics(summary)
+      setActivity(activityResponse.series)
+    } catch {
+      // analytics is a secondary read; surface silently and let the user retry via reload
+    } finally {
+      setAnalyticsLoaded(true)
+    }
+  }
 
   function resetUploadForm() {
     setUploadLabel('')
@@ -597,6 +645,9 @@ function App() {
       setDocumentError('')
       resetUploadForm()
       setDocumentTab('RESUME')
+      setAnalytics(null)
+      setActivity([])
+      setAnalyticsLoaded(false)
       setAuthUser(user)
       setApplications([])
       setNotice('')
@@ -632,6 +683,9 @@ function App() {
     setRenamingDocumentId(null)
     setRenameValue('')
     setDocumentDeleteTarget(null)
+    setAnalytics(null)
+    setActivity([])
+    setAnalyticsLoaded(false)
     setView('overview')
     setNotice('')
   }
@@ -737,6 +791,7 @@ function App() {
         setNotice('Application added')
       }
       setFormOpen(false)
+      void refreshAnalytics()
     } catch (error) {
       setApplicationError(applicationErrorMessage(error, 'Unable to save application.'))
     } finally {
@@ -754,6 +809,7 @@ function App() {
       const application = fromApiApplication(updated)
       setApplications((current) => current.map((item) => item.id === id ? application : item))
       setNotice('Status updated')
+      void refreshAnalytics()
     } catch (error) {
       setApplicationError(applicationErrorMessage(error, 'Unable to update status.'))
     }
@@ -767,6 +823,7 @@ function App() {
       setApplications((current) => current.filter((application) => application.id !== deleteTarget.id))
       setNotice('Application deleted')
       setDeleteTarget(null)
+      void refreshAnalytics()
     } catch (error) {
       setApplicationError(applicationErrorMessage(error, 'Unable to delete application.'))
     }
@@ -824,7 +881,7 @@ function App() {
               </section>
 
               <section className="metric-grid dashboard-kpis" aria-label="Application metrics">
-                <button className="metric-panel kpi-response" onClick={() => setView('stats')}><span className="kpi-icon"><ArrowUpRight size={15} /></span><span className="kpi-label">Response rate</span><strong>{responseRate}%</strong><small>{repliedApplications.length} of {sentApplications.length} replied</small></button>
+                <button className="metric-panel kpi-response" onClick={() => setView('stats')}><span className="kpi-icon"><ArrowUpRight size={15} /></span><span className="kpi-label">Response rate</span><strong>{responseRate}%</strong><small>{averageResponseDays != null ? `Avg ${averageResponseDays.toFixed(1)} days to first response` : 'Recruiter replies from applied roles'}</small></button>
                 <button className="metric-panel kpi-interviews" onClick={() => { setStatusFilter('INTERVIEW'); setView('applications') }}><span className="kpi-icon"><CalendarDays size={15} /></span><span className="kpi-label">Interviews</span><strong>{interviews}</strong><small>in progress</small></button>
                 <button className="metric-panel kpi-offers" onClick={() => { setStatusFilter('OFFER'); setView('applications') }}><span className="kpi-icon"><Check size={15} /></span><span className="kpi-label">Offers</span><strong>{offers}</strong><small>on the table</small></button>
                 <button className="metric-panel kpi-chasing" onClick={() => { setStatusFilter('APPLIED'); setView('applications') }}><span className="kpi-icon"><CalendarDays size={15} /></span><span className="kpi-label">Needs chasing</span><strong>{needsChasing}</strong><small>follow-ups due</small></button>
@@ -842,13 +899,29 @@ function App() {
                 </article>
 
                 <article className="panel dashboard-widget upcoming-widget">
-                  <div className="widget-heading"><div><h2>Coming up</h2><p>Follow-ups and next steps.</p></div><span className="week-label">NEXT 2 WEEKS</span></div>
-                  {[
-                    { company: 'Figma', task: 'Recruiter call', date: 'Tue · Sep 29', status: 'Screen' },
-                    { company: 'Linear', task: 'Portfolio review', date: 'Thu · Oct 1', status: 'Interview' },
-                    { company: 'Webflow', task: 'Offer decision', date: 'Fri · Oct 2', status: 'Offer' },
-                  ].map((item) => <div className="upcoming-row" key={item.company}><span className="calendar-tile"><CalendarDays size={14} /></span><span className="upcoming-copy"><strong>{item.company}</strong><small>{item.task} · {item.date}</small></span><span className="upcoming-status">{item.status}</span></div>)}
-                  <button className="widget-link" onClick={() => setNotice('Calendar sync will be added in a later milestone.')}>View schedule <ArrowUpRight size={13} /></button>
+                  <div className="widget-heading"><div><h2>Needs follow-up</h2><p>Applied over a week ago and still waiting.</p></div><span className="week-label">7+ DAYS</span></div>
+                  {(() => {
+                    const now = Date.now()
+                    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
+                    const followUps = applications
+                      .filter((application) => application.status === 'APPLIED' && application.dateApplied && (now - new Date(`${application.dateApplied}T12:00:00`).getTime()) >= sevenDaysMs)
+                      .sort((a, b) => new Date(a.dateApplied).getTime() - new Date(b.dateApplied).getTime())
+                      .slice(0, 4)
+                    if (followUps.length === 0) {
+                      return <div className="upcoming-empty">Nothing to chase right now — every recent application is fresh.</div>
+                    }
+                    return followUps.map((application) => {
+                      const daysAgo = Math.floor((now - new Date(`${application.dateApplied}T12:00:00`).getTime()) / (24 * 60 * 60 * 1000))
+                      return (
+                        <button className="upcoming-row upcoming-row-button" key={application.id} onClick={() => openEditForm(application)}>
+                          <span className="calendar-tile"><CalendarDays size={14} /></span>
+                          <span className="upcoming-copy"><strong>{application.company}</strong><small>{application.jobTitle} · Applied {daysAgo}d ago</small></span>
+                          <span className="upcoming-status">Follow up</span>
+                        </button>
+                      )
+                    })
+                  })()}
+                  <button className="widget-link" onClick={() => { setStatusFilter('APPLIED'); setView('applications') }}>View all applied <ArrowUpRight size={13} /></button>
                 </article>
 
                 <article className="panel dashboard-widget source-widget">
@@ -873,8 +946,50 @@ function App() {
             <>
               <section className="page-heading"><div><div className="eyebrow">YOUR JOB SEARCH</div><h1>Stats</h1><p>A clear read on your search so far.</p></div><button className="secondary-button" onClick={() => setView('overview')}>Back to dashboard</button></section>
               <section className="stats-layout">
-                <article className="panel stats-panel"><div className="widget-heading"><div><h2>Applications by status</h2><p>Current stage across your pipeline.</p></div></div>{statusCounts.map(({ status, count }) => <button className="stats-status-row" key={status} onClick={() => { setStatusFilter(status); setView('applications') }}><span className={`pipeline-dot status-${status.toLowerCase()}`} /><span>{statusLabels[status]}</span><span className="stats-track"><span style={{ width: `${count ? Math.max(8, (count / maxStatusCount) * 100) : 0}%` }} /></span><strong>{count}</strong></button>)}</article>
-                <article className="panel response-summary"><div className="eyebrow">RESPONSE RATE</div><strong>{responseRate}%</strong><p>{repliedApplications.length} responses from {sentApplications.length} applications sent.</p><button className="widget-link" onClick={() => setView('applications')}>Review applications <ArrowUpRight size={13} /></button></article>
+                <article className="panel stats-panel">
+                  <div className="widget-heading"><div><h2>Applications by status</h2><p>Current stage across your pipeline.</p></div></div>
+                  {analyticsLoading ? <div className="api-loading-table">Loading analytics…</div> : statusCounts.map(({ status, count }) => <button className="stats-status-row" key={status} onClick={() => { setStatusFilter(status); setView('applications') }}><span className={`pipeline-dot status-${status.toLowerCase()}`} /><span>{statusLabels[status]}</span><span className="stats-track"><span style={{ width: `${count ? Math.max(8, (count / maxStatusCount) * 100) : 0}%` }} /></span><strong>{count}</strong></button>)}
+                </article>
+                <article className="panel response-summary">
+                  <div className="eyebrow">RESPONSE RATE</div>
+                  <strong>{responseRate}%</strong>
+                  <p>{analytics?.responseRate != null ? 'Of applications that reached "Applied", this share received a recruiter reply.' : 'Sign in and add applications to see your response rate.'}</p>
+                  <div className="stats-secondary">
+                    <div><span>Interview conversion</span><strong>{interviewConversionRate != null ? `${Math.round(interviewConversionRate * 100)}%` : '—'}</strong></div>
+                    <div><span>Avg days to first reply</span><strong>{averageResponseDays != null ? averageResponseDays.toFixed(1) : '—'}</strong></div>
+                  </div>
+                  <button className="widget-link" onClick={() => setView('applications')}>Review applications <ArrowUpRight size={13} /></button>
+                </article>
+              </section>
+              <section className="panel activity-panel">
+                <div className="widget-heading"><div><h2>Activity over time</h2><p>Applications created and applied to, weekly.</p></div></div>
+                {analyticsLoading ? (
+                  <div className="api-loading-table">Loading activity…</div>
+                ) : activity.length === 0 ? (
+                  <div className="empty-state"><CalendarDays size={22} /><strong>No activity yet</strong><span>Once you add applications, weekly activity will appear here.</span></div>
+                ) : (
+                  <div className="activity-chart">
+                    {(() => {
+                      const maxValue = Math.max(1, ...activity.map((bucket) => Math.max(bucket.created, bucket.applied)))
+                      return activity.map((bucket) => {
+                        const label = new Date(bucket.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                        return (
+                          <div className="activity-bucket" key={bucket.periodStart} title={`Week of ${label}: ${bucket.created} created, ${bucket.applied} applied`}>
+                            <div className="activity-bars">
+                              <span className="activity-bar activity-bar-created" style={{ height: `${(bucket.created / maxValue) * 100}%` }} aria-label={`${bucket.created} created`} />
+                              <span className="activity-bar activity-bar-applied" style={{ height: `${(bucket.applied / maxValue) * 100}%` }} aria-label={`${bucket.applied} applied`} />
+                            </div>
+                            <span className="activity-label">{label}</span>
+                          </div>
+                        )
+                      })
+                    })()}
+                  </div>
+                )}
+                <div className="activity-legend">
+                  <span><span className="activity-swatch activity-swatch-created" /> Created</span>
+                  <span><span className="activity-swatch activity-swatch-applied" /> Applied</span>
+                </div>
               </section>
             </>
           ) : view === 'documents' ? (
