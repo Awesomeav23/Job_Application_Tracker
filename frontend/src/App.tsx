@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   ArrowUpRight,
   BriefcaseBusiness,
@@ -7,17 +7,20 @@ import {
   ChevronDown,
   CircleHelp,
   FileText,
+  KeyRound,
   LayoutDashboard,
   MapPin,
   MoreHorizontal,
   Plus,
   Search,
+  ShieldCheck,
   Settings2,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
 import './App.css'
+import { ApiError, authenticate, clearSession, getCurrentUser, hasSession, type AuthUser } from './lib/api'
 
 type Status = 'SAVED' | 'APPLIED' | 'RECRUITER_SCREEN' | 'INTERVIEW' | 'OFFER' | 'REJECTED' | 'WITHDRAWN'
 type View = 'overview' | 'board' | 'applications' | 'stats'
@@ -40,6 +43,23 @@ type ApplicationDraft = Omit<Application, 'id'>
 
 const statuses: Status[] = ['SAVED', 'APPLIED', 'RECRUITER_SCREEN', 'INTERVIEW', 'OFFER', 'REJECTED', 'WITHDRAWN']
 const sources = ['LinkedIn', 'Company website', 'Referral', 'Indeed', 'Other']
+const SAVED_EMAILS_KEY = 'fieldnote.savedEmails'
+
+function getSavedEmails(): string[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVED_EMAILS_KEY) || '[]')
+    return Array.isArray(saved) ? saved.filter((email): email is string => typeof email === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function rememberEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!normalizedEmail) return
+  const emails = getSavedEmails().filter((savedEmail) => savedEmail.toLowerCase() !== normalizedEmail)
+  localStorage.setItem(SAVED_EMAILS_KEY, JSON.stringify([normalizedEmail, ...emails].slice(0, 5)))
+}
 
 const statusLabels: Record<Status, string> = {
   SAVED: 'Saved',
@@ -92,6 +112,25 @@ const emptyDraft: ApplicationDraft = {
 function formatDate(value: string) {
   if (!value) return 'Not set'
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(`${value}T12:00:00`))
+}
+
+async function askBrowserToSavePassword(user: AuthUser, password: string) {
+  const PasswordCredential = (window as Window & {
+    PasswordCredential?: new (data: { id: string; name?: string; password: string }) => Credential
+  }).PasswordCredential
+  if (!PasswordCredential || typeof navigator.credentials?.store !== 'function') return false
+
+  try {
+    const credential = new PasswordCredential({
+      id: user.email,
+      name: user.displayName || user.email,
+      password,
+    })
+    await navigator.credentials.store(credential)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function ApplicationTable({
@@ -148,6 +187,15 @@ function ApplicationTable({
 }
 
 function App() {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(() => hasSession())
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [authError, setAuthError] = useState('')
+  const [authSuccess, setAuthSuccess] = useState('')
+  const [authBusy, setAuthBusy] = useState(false)
+  const [passwordOptionsOpen, setPasswordOptionsOpen] = useState(false)
+  const [savedEmails, setSavedEmails] = useState<string[]>(getSavedEmails)
+  const [authFields, setAuthFields] = useState({ email: '', password: '', displayName: '' })
   const [view, setView] = useState<View>('overview')
   const [applications, setApplications] = useState(initialApplications)
   const [query, setQuery] = useState('')
@@ -180,6 +228,113 @@ function App() {
     count: applications.filter((application) => application.source === source).length,
   }))
   const maxSourceCount = Math.max(1, ...sourceCounts.map((item) => item.count))
+
+  useEffect(() => {
+    let cancelled = false
+    if (!hasSession()) {
+      return () => { cancelled = true }
+    }
+    getCurrentUser()
+      .then((user) => { if (!cancelled) setAuthUser(user) })
+      .catch(() => { if (!cancelled) clearSession() })
+      .finally(() => { if (!cancelled) setAuthLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const creatingAccount = authMode === 'register'
+    setAuthBusy(true)
+    setAuthError('')
+    try {
+      const user = await authenticate(authMode, {
+        email: authFields.email.trim(),
+        password: authFields.password,
+        ...(authMode === 'register' && authFields.displayName.trim() ? { displayName: authFields.displayName.trim() } : {}),
+      })
+      if (creatingAccount) {
+        rememberEmail(user.email)
+        setSavedEmails(getSavedEmails())
+        const browserSaveRequested = await askBrowserToSavePassword(user, authFields.password)
+        setAuthMode('login')
+        setAuthSuccess(browserSaveRequested
+          ? `Account created for ${user.email}. Your browser was asked to save this password. Sign in below.`
+          : `Account created for ${user.email}. Sign in below; your password is still filled in.`)
+        return
+      }
+      rememberEmail(user.email)
+      setSavedEmails(getSavedEmails())
+      setAuthUser(user)
+      setApplications([])
+      setNotice('')
+    } catch (error) {
+      setAuthError(error instanceof ApiError ? error.message : 'Unable to authenticate. Please try again.')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
+  function suggestStrongPassword() {
+    const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?'
+    const randomValues = crypto.getRandomValues(new Uint32Array(20))
+    const password = Array.from(randomValues, (value) => characters[value % characters.length]).join('')
+    setAuthFields((current) => ({ ...current, password }))
+  }
+
+  function signOut() {
+    clearSession()
+    setAuthUser(null)
+    setAuthFields({ email: '', password: '', displayName: '' })
+    setAuthMode('login')
+    setAuthError('')
+    setAuthSuccess('')
+    setPasswordOptionsOpen(false)
+    setApplications([])
+    setView('overview')
+    setNotice('')
+  }
+
+  if (authLoading) {
+    return <main className="auth-loading"><span className="auth-loading-mark"><BriefcaseBusiness size={20} /></span><span>Checking your session…</span></main>
+  }
+
+  if (!authUser) {
+    return (
+      <main className="auth-screen">
+        <section className="auth-brand-panel">
+          <a className="auth-brand" href="#signin"><span className="auth-brand-mark"><BriefcaseBusiness size={19} /></span><span>fieldnote<small>JOB SEARCH, IN FOCUS</small></span></a>
+          <div className="auth-message"><span className="auth-kicker">A CLEARER WAY FORWARD</span><h1>Keep your<br />next move<br /><em>in view.</em></h1><p>Every application, conversation, and possibility, gathered in one thoughtful place.</p></div>
+          <div className="auth-trust"><ShieldCheck size={16} /><span>Your job search stays private to your account.</span></div>
+          <span className="auth-orbit orbit-one" /><span className="auth-orbit orbit-two" />
+        </section>
+        <section className="auth-form-panel">
+          <div className="auth-mobile-brand"><span className="auth-brand-mark"><BriefcaseBusiness size={18} /></span><span>fieldnote</span></div>
+          <div className="auth-form-wrap">
+            <span className="auth-kicker">{authMode === 'login' ? 'WELCOME BACK' : 'GET STARTED'}</span>
+            <h2>{authMode === 'login' ? 'Sign in to Fieldnote' : 'Create your account'}</h2>
+            <p className="auth-intro">{authMode === 'login' ? 'Pick up where your job search left off.' : 'A focused home for everything in your job search.'}</p>
+            <div className="auth-switch" role="tablist" aria-label="Authentication mode">
+              <button type="button" className={authMode === 'login' ? 'selected' : ''} role="tab" aria-selected={authMode === 'login'} onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess(''); setPasswordOptionsOpen(false) }}>Sign in</button>
+              <button type="button" className={authMode === 'register' ? 'selected' : ''} role="tab" aria-selected={authMode === 'register'} onClick={() => { setAuthMode('register'); setAuthError(''); setAuthSuccess(''); setPasswordOptionsOpen(false) }}>Create account</button>
+            </div>
+            {authError && <div className="auth-error" role="alert">{authError}</div>}
+            {authSuccess && <div className="auth-success" role="status">{authSuccess}</div>}
+            <form className="auth-form" onSubmit={submitAuth}>
+              {authMode === 'register' && <label className="auth-field"><span>Your name <small>Optional</small></span><input autoComplete="name" maxLength={100} value={authFields.displayName} onChange={(event) => setAuthFields({ ...authFields, displayName: event.target.value })} placeholder="How should we address you?" /></label>}
+              <label className="auth-field"><span>Email address</span><input type="email" required autoComplete="username" list={authMode === 'login' && savedEmails.length ? 'saved-account-emails' : undefined} value={authFields.email} onChange={(event) => setAuthFields({ ...authFields, email: event.target.value })} placeholder="you@example.com" />{authMode === 'login' && savedEmails.length > 0 && <datalist id="saved-account-emails">{savedEmails.map((email) => <option key={email} value={email} />)}</datalist>}</label>
+              <div className="password-entry" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setPasswordOptionsOpen(false) }}>
+                <label className="auth-field"><span>Password{authMode === 'register' && <small>At least 8 characters</small>}</span><input type="password" required minLength={8} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} value={authFields.password} onFocus={() => { if (authMode === 'register') setPasswordOptionsOpen(true) }} onChange={(event) => setAuthFields({ ...authFields, password: event.target.value })} placeholder="Enter your password" />{authMode === 'register' && passwordOptionsOpen && <span className="password-guidance">Choose your own, use Chrome’s suggested password, or generate one here.</span>}</label>
+                {authMode === 'register' && passwordOptionsOpen && <button className="password-suggest" type="button" onClick={suggestStrongPassword}><KeyRound size={14} />Suggest a strong password</button>}
+              </div>
+              <button className="auth-submit" type="submit" disabled={authBusy}>{authBusy ? 'Please wait…' : authMode === 'login' ? 'Sign in' : 'Create account'}<ArrowUpRight size={16} /></button>
+            </form>
+            <p className="auth-footnote">By continuing, your application data will be stored securely in your account.</p>
+          </div>
+          <span className="auth-copyright">FIELDNOTE · YOUR SEARCH, ORGANIZED</span>
+        </section>
+      </main>
+    )
+  }
 
   function openCreateForm() {
     setEditing(null)
@@ -235,14 +390,14 @@ function App() {
         <div className="sidebar-bottom">
           <button className="nav-link muted-link" onClick={() => setNotice('Settings will be available in a later milestone.')}><Settings2 size={17} />Settings</button>
           <button className="nav-link muted-link" onClick={() => setNotice('Help will be available in a later milestone.')}><CircleHelp size={17} />Help</button>
-          <div className="user-chip"><span className="avatar">A</span><span><strong>Alex Morgan</strong><small>Personal workspace</small></span><MoreHorizontal size={16} /></div>
+          <button className="user-chip" onClick={signOut} title="Sign out"><span className="avatar">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</span><span><strong>{authUser.displayName || authUser.email}</strong><small>Sign out</small></span><MoreHorizontal size={16} /></button>
         </div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumb"><span>Workspace</span><span className="crumb-separator">/</span><strong>{view === 'overview' ? 'Dashboard' : view === 'board' ? 'Board' : view === 'stats' ? 'Stats' : 'Applications'}</strong></div>
-          <div className="topbar-actions"><span className="today-label"><CalendarDays size={14} />Friday, September 25</span><button className="help-button" aria-label="Help" title="Help"><CircleHelp size={18} /></button><span className="top-avatar">A</span></div>
+          <div className="topbar-actions"><span className="today-label"><CalendarDays size={14} />Friday, September 25</span><button className="help-button" aria-label="Help" title="Help"><CircleHelp size={18} /></button><button className="account-menu" onClick={signOut} title="Sign out"><span className="top-avatar">{(authUser.displayName || authUser.email).slice(0, 1).toUpperCase()}</span><span>{authUser.displayName || authUser.email}</span><span className="signout-label">Sign out</span></button></div>
         </header>
 
         <div className="page-content">
