@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
-import { ApiError, authenticate, clearSession, getCurrentUser, hasSession, type AuthUser } from './lib/api'
+import { ApiError, apiFetch, authenticate, clearSession, getCurrentUser, hasSession, type AuthUser } from './lib/api'
 
 type Status = 'SAVED' | 'APPLIED' | 'RECRUITER_SCREEN' | 'INTERVIEW' | 'OFFER' | 'REJECTED' | 'WITHDRAWN'
 type View = 'overview' | 'board' | 'applications' | 'stats'
@@ -41,9 +41,19 @@ interface Application {
 
 type ApplicationDraft = Omit<Application, 'id'>
 
+interface ApiApplication extends Omit<Application, 'dateApplied' | 'source' | 'location' | 'salary' | 'url' | 'notes'> {
+  dateApplied: string | null
+  location: string | null
+  salary: string | null
+  url: string | null
+  notes: string | null
+  source: 'MANUAL' | 'EXTENSION'
+}
+
 const statuses: Status[] = ['SAVED', 'APPLIED', 'RECRUITER_SCREEN', 'INTERVIEW', 'OFFER', 'REJECTED', 'WITHDRAWN']
-const sources = ['LinkedIn', 'Company website', 'Referral', 'Indeed', 'Other']
+const sources = ['MANUAL', 'EXTENSION'] as const
 const SAVED_EMAILS_KEY = 'fieldnote.savedEmails'
+const SAMPLE_SEEDED_PREFIX = 'fieldnote.sampleApplicationsSeeded.v2:'
 
 function getSavedEmails(): string[] {
   try {
@@ -71,47 +81,84 @@ const statusLabels: Record<Status, string> = {
   WITHDRAWN: 'Withdrawn',
 }
 
-const initialApplications: Application[] = [
-  {
-    id: 'app-1', company: 'Linear', jobTitle: 'Product Designer', status: 'INTERVIEW', location: 'New York, NY', source: 'LinkedIn',
-    dateApplied: '2026-09-22', salary: '$145k–$175k', url: 'https://linear.app/careers',
-    jobDescription: 'Shape the tools that help product teams do their best work.', notes: 'Portfolio review with Maya on Thursday.',
-  },
-  {
-    id: 'app-2', company: 'Figma', jobTitle: 'Senior UX Designer', status: 'RECRUITER_SCREEN', location: 'Remote · US', source: 'LinkedIn',
-    dateApplied: '2026-09-19', salary: '$160k–$195k', url: 'https://figma.com/careers',
-    jobDescription: 'Help make design accessible to more teams and communities.', notes: 'Recruiter call booked for next week.',
-  },
-  {
-    id: 'app-3', company: 'Notion', jobTitle: 'Product Designer, Growth', status: 'APPLIED', location: 'San Francisco, CA', source: 'Company website',
-    dateApplied: '2026-09-16', salary: '$150k–$180k', url: 'https://notion.so/careers',
-    jobDescription: 'Design thoughtful experiences that help teams build momentum.', notes: '',
-  },
-  {
-    id: 'app-4', company: 'Airtable', jobTitle: 'Design Systems Lead', status: 'SAVED', location: 'Remote · US', source: 'Company website',
-    dateApplied: '2026-09-14', salary: '$155k–$190k', url: 'https://airtable.com/careers',
-    jobDescription: 'Build and evolve a design system used across a flexible platform.', notes: 'Tailor portfolio to component systems.',
-  },
-  {
-    id: 'app-5', company: 'Webflow', jobTitle: 'Staff Product Designer', status: 'OFFER', location: 'Remote · US', source: 'Referral',
-    dateApplied: '2026-09-11', salary: '$175k–$210k', url: 'https://webflow.com/careers',
-    jobDescription: 'Help people build for the web through visual development.', notes: 'Offer received. Decision due October 2.',
-  },
-  {
-    id: 'app-6', company: 'Dropbox', jobTitle: 'Product Designer', status: 'REJECTED', location: 'Austin, TX', source: 'Indeed',
-    dateApplied: '2026-09-08', salary: '$140k–$170k', url: 'https://dropbox.com/jobs',
-    jobDescription: 'Create calm, useful experiences for distributed work.', notes: '',
-  },
-]
-
 const emptyDraft: ApplicationDraft = {
   company: '', jobTitle: '', status: 'SAVED', location: '', dateApplied: new Date().toISOString().slice(0, 10),
   salary: '', url: '', jobDescription: '', notes: '', source: 'Company website',
 }
 
+const sampleCompanies = [
+  { name: 'Northstar Analytics', location: 'Remote · US' },
+  { name: 'Cedar Labs', location: 'Boston, MA · Hybrid' },
+  { name: 'Harbor Health', location: 'Remote · US' },
+  { name: 'Juniper Works', location: 'Chicago, IL' },
+  { name: 'Mosaic Learning', location: 'Remote · US' },
+  { name: 'Redwood Mobility', location: 'Portland, OR · Hybrid' },
+  { name: 'Blue Oak Finance', location: 'New York, NY' },
+  { name: 'Summit Climate', location: 'Denver, CO · Hybrid' },
+  { name: 'Atlas Commerce', location: 'Remote · US' },
+  { name: 'Kindred Care', location: 'Austin, TX' },
+  { name: 'Lantern Studio', location: 'Los Angeles, CA · Hybrid' },
+  { name: 'Fieldstone Systems', location: 'Seattle, WA' },
+] as const
+
+const sampleRoles = [
+  { title: 'Junior Data Analyst', salary: '$72,000–$88,000', description: 'Build clear reports, validate datasets, and explain trends to product and operations teams. SQL, spreadsheets, and strong communication are useful.' },
+  { title: 'Associate Product Designer', salary: '$88,000–$108,000', description: 'Turn customer problems into accessible interface designs. Share prototypes, collaborate with engineers, and iterate based on research.' },
+  { title: 'Software Engineer I', salary: '$96,000–$120,000', description: 'Build reliable web features, write automated tests, and work with product and design. TypeScript experience is helpful.' },
+  { title: 'Customer Success Associate', salary: '$64,000–$78,000', description: 'Help customers onboard, answer product questions, and share customer feedback with the product team.' },
+  { title: 'Content Strategist', salary: '$82,000–$98,000', description: 'Plan and create useful learning content across web and email. Partner with subject experts and measure engagement.' },
+  { title: 'Operations Coordinator', salary: '$68,000–$82,000', description: 'Coordinate schedules, improve internal workflows, and keep cross-functional projects moving.' },
+  { title: 'Product Manager', salary: '$110,000–$138,000', description: 'Set product priorities with customer research, define clear outcomes, and coordinate delivery across design and engineering.' },
+] as const
+
+const sampleNotes = [
+  'Tailor the resume to the role before the next step.',
+  'Follow up if there is no response by next week.',
+  'Prepare a short overview of relevant project experience.',
+  'Review the company product and recent announcements.',
+  'Capture interview notes and follow-up actions here.',
+  'Check the role requirements against the portfolio.',
+] as const
+
+const sampleApplications = Array.from({ length: 84 }, (_, index) => {
+  const company = sampleCompanies[Math.floor(index / sampleRoles.length)]
+  const role = sampleRoles[index % sampleRoles.length]
+  const status = statuses[(index * 3) % statuses.length]
+  return {
+    company: company.name,
+    jobTitle: role.title,
+    jobDescription: role.description,
+    status,
+    location: company.location,
+    salary: role.salary,
+    url: `https://example.com/jobs/${company.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${role.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+    notes: sampleNotes[index % sampleNotes.length],
+    daysAgo: (index * 11) % 91,
+  }
+})
+
 function formatDate(value: string) {
   if (!value) return 'Not set'
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(`${value}T12:00:00`))
+}
+
+function fromApiApplication(application: ApiApplication): Application {
+  return {
+    ...application,
+    dateApplied: application.dateApplied?.slice(0, 10) ?? '',
+    location: application.location ?? '',
+    salary: application.salary ?? '',
+    url: application.url ?? '',
+    notes: application.notes ?? '',
+  }
+}
+
+function applicationErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    const fieldErrors = Object.entries(error.fields ?? {}).map(([field, message]) => `${field}: ${message}`)
+    return fieldErrors.length ? `${error.message} ${fieldErrors.join('; ')}` : error.message
+  }
+  return error instanceof Error ? error.message : fallback
 }
 
 async function askBrowserToSavePassword(user: AuthUser, password: string) {
@@ -197,7 +244,10 @@ function App() {
   const [savedEmails, setSavedEmails] = useState<string[]>(getSavedEmails)
   const [authFields, setAuthFields] = useState({ email: '', password: '', displayName: '' })
   const [view, setView] = useState<View>('overview')
-  const [applications, setApplications] = useState(initialApplications)
+  const [applications, setApplications] = useState<Application[]>([])
+  const [applicationsLoaded, setApplicationsLoaded] = useState(false)
+  const [applicationError, setApplicationError] = useState('')
+  const [applicationSaving, setApplicationSaving] = useState(false)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [formOpen, setFormOpen] = useState(false)
@@ -228,6 +278,7 @@ function App() {
     count: applications.filter((application) => application.source === source).length,
   }))
   const maxSourceCount = Math.max(1, ...sourceCounts.map((item) => item.count))
+  const applicationsLoading = Boolean(authUser) && !applicationsLoaded
 
   useEffect(() => {
     let cancelled = false
@@ -240,6 +291,66 @@ function App() {
       .finally(() => { if (!cancelled) setAuthLoading(false) })
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (!authUser) return
+    const userId = authUser.id
+    let cancelled = false
+    async function loadApplications() {
+      try {
+        const items = await apiFetch<ApiApplication[]>('/applications')
+        if (cancelled) return
+
+        const seedKey = `${SAMPLE_SEEDED_PREFIX}${userId}`
+        const existingApplications = items.map(fromApiApplication)
+        setApplications(existingApplications)
+
+        if (localStorage.getItem(seedKey) === 'true') {
+          return
+        }
+
+        const existingKeys = new Set(existingApplications.map((application) => `${application.company.toLowerCase()}|${application.jobTitle.toLowerCase()}`))
+        const missingSamples = sampleApplications.filter((sample) => !existingKeys.has(`${sample.company.toLowerCase()}|${sample.jobTitle.toLowerCase()}`))
+        if (missingSamples.length === 0) {
+          localStorage.setItem(seedKey, 'true')
+          return
+        }
+
+        for (const sample of missingSamples) {
+          const appliedDate = new Date()
+          appliedDate.setUTCDate(appliedDate.getUTCDate() - sample.daysAgo)
+          const saved = await apiFetch<ApiApplication>('/applications', {
+            method: 'POST',
+            body: JSON.stringify({
+              company: sample.company,
+              jobTitle: sample.jobTitle,
+              jobDescription: sample.jobDescription,
+              status: sample.status,
+              location: sample.location,
+              salary: sample.salary,
+              url: sample.url,
+              notes: sample.notes,
+              dateApplied: appliedDate.toISOString(),
+            }),
+          })
+          if (!cancelled) setApplications((current) => [fromApiApplication(saved), ...current])
+          if (cancelled) return
+        }
+        localStorage.setItem(seedKey, 'true')
+        setNotice(`${missingSamples.length} sample applications were added so you can explore the tracker. You can edit or delete them anytime.`)
+      } catch (error) {
+        if (!cancelled) {
+          const latestApplications = await apiFetch<ApiApplication[]>('/applications').catch(() => [])
+          if (latestApplications.length) setApplications(latestApplications.map(fromApiApplication))
+          setApplicationError(applicationErrorMessage(error, 'Unable to load applications.'))
+        }
+      } finally {
+        if (!cancelled) setApplicationsLoaded(true)
+      }
+    }
+    void loadApplications()
+    return () => { cancelled = true }
+  }, [authUser])
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -264,6 +375,8 @@ function App() {
       }
       rememberEmail(user.email)
       setSavedEmails(getSavedEmails())
+      setApplicationsLoaded(false)
+      setApplicationError('')
       setAuthUser(user)
       setApplications([])
       setNotice('')
@@ -290,6 +403,7 @@ function App() {
     setAuthSuccess('')
     setPasswordOptionsOpen(false)
     setApplications([])
+    setApplicationsLoaded(false)
     setView('overview')
     setNotice('')
   }
@@ -338,38 +452,92 @@ function App() {
 
   function openCreateForm() {
     setEditing(null)
+    setApplicationError('')
     setDraft({ ...emptyDraft, dateApplied: new Date().toISOString().slice(0, 10) })
     setFormOpen(true)
   }
 
   function openEditForm(application: Application) {
     setEditing(application)
+    setApplicationError('')
     setDraft({ ...application })
     setFormOpen(true)
   }
 
-  function saveApplication(event: FormEvent<HTMLFormElement>) {
+  async function saveApplication(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (editing) {
-      setApplications((current) => current.map((application) => application.id === editing.id ? { ...draft, id: editing.id } : application))
-      setNotice('Application updated')
-    } else {
-      setApplications((current) => [{ ...draft, id: `app-${Date.now()}` }, ...current])
-      setNotice('Application added')
+    setApplicationSaving(true)
+    setApplicationError('')
+    const dateApplied = draft.dateApplied ? new Date(`${draft.dateApplied}T00:00:00.000Z`).toISOString() : null
+    try {
+      const basePayload = {
+        company: draft.company.trim(),
+        jobTitle: draft.jobTitle.trim(),
+        jobDescription: draft.jobDescription.trim(),
+        status: draft.status,
+      }
+      const payload = editing
+        ? {
+            ...basePayload,
+            location: draft.location.trim() || null,
+            salary: draft.salary.trim() || null,
+            url: draft.url.trim() || null,
+            dateApplied,
+            notes: draft.notes.trim() || null,
+          }
+        : {
+            ...basePayload,
+            ...(draft.location.trim() ? { location: draft.location.trim() } : {}),
+            ...(draft.salary.trim() ? { salary: draft.salary.trim() } : {}),
+            ...(draft.url.trim() ? { url: draft.url.trim() } : {}),
+            ...(dateApplied ? { dateApplied } : {}),
+            ...(draft.notes.trim() ? { notes: draft.notes.trim() } : {}),
+          }
+      const saved = editing
+        ? await apiFetch<ApiApplication>(`/applications/${editing.id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+        : await apiFetch<ApiApplication>('/applications', { method: 'POST', body: JSON.stringify(payload) })
+      const application = fromApiApplication(saved)
+      if (editing) {
+        setApplications((current) => current.map((item) => item.id === editing.id ? application : item))
+        setNotice('Application updated')
+      } else {
+        setApplications((current) => [application, ...current])
+        setNotice('Application added')
+      }
+      setFormOpen(false)
+    } catch (error) {
+      setApplicationError(applicationErrorMessage(error, 'Unable to save application.'))
+    } finally {
+      setApplicationSaving(false)
     }
-    setFormOpen(false)
   }
 
-  function updateStatus(id: string, status: Status) {
-    setApplications((current) => current.map((application) => application.id === id ? { ...application, status } : application))
-    setNotice('Status updated')
+  async function updateStatus(id: string, status: Status) {
+    setApplicationError('')
+    try {
+      const updated = await apiFetch<ApiApplication>(`/applications/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      })
+      const application = fromApiApplication(updated)
+      setApplications((current) => current.map((item) => item.id === id ? application : item))
+      setNotice('Status updated')
+    } catch (error) {
+      setApplicationError(applicationErrorMessage(error, 'Unable to update status.'))
+    }
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteTarget) return
-    setApplications((current) => current.filter((application) => application.id !== deleteTarget.id))
-    setNotice('Application deleted')
-    setDeleteTarget(null)
+    setApplicationError('')
+    try {
+      await apiFetch<{ deleted: boolean }>(`/applications/${deleteTarget.id}`, { method: 'DELETE' })
+      setApplications((current) => current.filter((application) => application.id !== deleteTarget.id))
+      setNotice('Application deleted')
+      setDeleteTarget(null)
+    } catch (error) {
+      setApplicationError(applicationErrorMessage(error, 'Unable to delete application.'))
+    }
   }
 
   return (
@@ -402,6 +570,8 @@ function App() {
 
         <div className="page-content">
           {notice && <div className="notice" role="status"><Check size={15} />{notice}<button aria-label="Dismiss notification" onClick={() => setNotice('')}><X size={14} /></button></div>}
+          {applicationError && !formOpen && <div className="api-error-banner" role="alert">{applicationError}<button aria-label="Dismiss error" onClick={() => setApplicationError('')}><X size={14} /></button></div>}
+          {applicationsLoading && <div className="api-loading-banner" role="status">Loading your saved applications…</div>}
 
           {view === 'overview' ? (
             <>
@@ -450,7 +620,7 @@ function App() {
 
                 <article className="panel dashboard-widget source-widget">
                   <div className="widget-heading"><div><h2>Where roles come from</h2><p>Channels your applications came from.</p></div></div>
-                  {sourceCounts.map(({ source, count }) => <button className="source-row" key={source} onClick={() => setView('applications')}><span>{source}</span><span className="source-track"><span style={{ width: `${count ? Math.max(10, (count / maxSourceCount) * 100) : 0}%` }} /></span><strong>{count}</strong></button>)}
+                  {sourceCounts.map(({ source, count }) => <button className="source-row" key={source} onClick={() => setView('applications')}><span>{source === 'MANUAL' ? 'Manual entry' : 'Browser extension'}</span><span className="source-track"><span style={{ width: `${count ? Math.max(10, (count / maxSourceCount) * 100) : 0}%` }} /></span><strong>{count}</strong></button>)}
                   <div className="widget-footnote">Source breakdown from your current applications.</div>
                 </article>
               </section>
@@ -483,7 +653,7 @@ function App() {
               <section className="applications-summary"><div><strong>{filteredApplications.length}</strong><span>{filteredApplications.length === 1 ? 'application' : 'applications'}</span></div><div className="summary-divider" /><div><strong>{interviews}</strong><span>active conversations</span></div><div className="summary-note"><span className="summary-spark"><Sparkles size={14} /></span>One clear next step is enough for today.</div></section>
               <section className="panel applications-panel">
                 <div className="table-toolbar"><div className="toolbar-title"><h2>All applications</h2><span>{applications.length.toString().padStart(2, '0')} total</span></div><div className="table-controls"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search roles or companies" aria-label="Search roles or companies" />{query && <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button>}</label><label className="filter-select"><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">All statuses</option>{statuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</select><ChevronDown size={14} /></label></div></div>
-                <ApplicationTable applications={filteredApplications} onEdit={openEditForm} onStatusChange={updateStatus} onDelete={setDeleteTarget} />
+                {applicationsLoading ? <div className="api-loading-table">Loading your applications…</div> : <ApplicationTable applications={filteredApplications} onEdit={openEditForm} onStatusChange={updateStatus} onDelete={setDeleteTarget} />}
                 <div className="table-footer"><span>Showing {filteredApplications.length} of {applications.length} applications</span><button onClick={openCreateForm}><Plus size={14} />New application</button></div>
               </section>
               <footer className="page-footer"><span>FIELDNOTE <span className="footer-dot">·</span> YOUR SEARCH, ORGANIZED</span><button onClick={() => setNotice('Your data is currently saved for this session only. API connection is the next step.')}><FileText size={13} /> Data status</button></footer>
@@ -497,6 +667,7 @@ function App() {
           <section className="application-modal" role="dialog" aria-modal="true" aria-labelledby="form-title">
             <div className="modal-heading"><div><div className="eyebrow">APPLICATION DETAILS</div><h2 id="form-title">{editing ? 'Update application' : 'Add an application'}</h2></div><button className="icon-button modal-close" aria-label="Close form" onClick={() => setFormOpen(false)}><X size={18} /></button></div>
             <form onSubmit={saveApplication}>
+              {applicationError && <div className="api-error-banner" role="alert">{applicationError}<button type="button" aria-label="Dismiss error" onClick={() => setApplicationError('')}><X size={14} /></button></div>}
               <div className="form-grid">
                 <label className="form-field"><span>Company <b>*</b></span><input required maxLength={120} value={draft.company} onChange={(event) => setDraft({ ...draft, company: event.target.value })} placeholder="e.g. Acme Studio" autoFocus /></label>
                 <label className="form-field"><span>Job title <b>*</b></span><input required maxLength={200} value={draft.jobTitle} onChange={(event) => setDraft({ ...draft, jobTitle: event.target.value })} placeholder="e.g. Product Designer" /></label>
@@ -504,11 +675,11 @@ function App() {
                 <label className="form-field"><span>Date applied</span><input type="date" value={draft.dateApplied} onChange={(event) => setDraft({ ...draft, dateApplied: event.target.value })} /></label>
                 <label className="form-field"><span>Location</span><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} placeholder="Remote, city, or hybrid" /></label>
                 <label className="form-field"><span>Salary range</span><input maxLength={80} value={draft.salary} onChange={(event) => setDraft({ ...draft, salary: event.target.value })} placeholder="Optional" /></label>
-                <label className="form-field form-wide"><span>Job posting URL</span><input type="url" value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} placeholder="https://" /></label>
+                <label className="form-field form-wide"><span>Job posting URL</span><input type="url" maxLength={500} value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} placeholder="https://" /></label>
                 <label className="form-field form-wide"><span>Job description <b>*</b></span><textarea required maxLength={12000} rows={4} value={draft.jobDescription} onChange={(event) => setDraft({ ...draft, jobDescription: event.target.value })} placeholder="Paste the job description or a short summary" /></label>
                 <label className="form-field form-wide"><span>Notes</span><textarea maxLength={4000} rows={3} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder="Follow-ups, people, or details to remember" /></label>
               </div>
-              <div className="modal-actions"><span><b>*</b> Required fields</span><div><button type="button" className="secondary-button" onClick={() => setFormOpen(false)}>Cancel</button><button type="submit" className="primary-button"><Check size={16} />{editing ? 'Save changes' : 'Save application'}</button></div></div>
+              <div className="modal-actions"><span><b>*</b> Required fields</span><div><button type="button" className="secondary-button" onClick={() => setFormOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={applicationSaving}><Check size={16} />{applicationSaving ? 'Saving…' : editing ? 'Save changes' : 'Save application'}</button></div></div>
             </form>
           </section>
         </div>

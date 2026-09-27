@@ -6,21 +6,19 @@ A full-stack job search tracker with an Express API and a React frontend. The re
 
 The backend API is implemented for authentication, application management, document management, analytics, and mock AI analysis. Its test suite previously passed 17 tests across five test files.
 
-The frontend currently has a responsive dashboard, Board, Stats, and application create/edit/delete flows. It still uses sample data in browser memory; it is not connected to the backend, so changes do not persist after a reload. The upcoming items and source breakdown are also sample data.
+The frontend has registration/sign-in, a responsive dashboard, Board, Stats, and application create/edit/delete flows. Authentication and application CRUD are connected to the backend; each signed-in user loads their own applications, and changes persist after reload. The dashboard's upcoming schedule is still sample data, and its analytics cards are computed from the loaded application list rather than the analytics API.
 
 The project is not yet a complete or deployed product.
 
 ## Remaining Work
 
-1. **Frontend authentication and API client**
-   - Build registration and sign-in screens.
-   - Connect authentication to the backend and handle the user session.
-   - Configure the frontend API base URL and verify local CORS settings.
+1. **Frontend authentication and API client — implemented**
+   - Registration, sign-in, session restoration, and sign-out are connected to the backend.
+   - The frontend API client attaches the bearer token and handles API errors.
 
-2. **Persistent application management**
-   - Replace frontend fixture data with the applications API.
-   - Connect list, search, status filtering, create, edit, status change, and delete flows.
-   - Verify application changes survive a page reload.
+2. **Persistent application management — implemented**
+   - Application list, search, status filtering, create, edit, status change, and delete use the API.
+   - Application changes were verified to survive a page reload.
 
 3. **Documents, analytics, and AI screens**
    - Build resume and cover-letter upload and association workflows.

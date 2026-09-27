@@ -943,6 +943,10 @@
 .auth-field .password-guidance { display: block; margin-top: -2px; color: #858c9b; font-size: 10px; font-weight: 400; line-height: 1.5; }
 .password-suggest { display: inline-flex; width: fit-content; align-items: center; gap: 6px; margin-top: -10px; padding: 4px 0; border: 0; background: transparent; color: #455b98; cursor: pointer; font: 600 11px var(--body); }
 .password-suggest:hover { color: #283d7c; text-decoration: underline; }
+.api-error-banner { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid #eed0cf; border-radius: 5px; background: #fcf1f0; color: #a1423b; font-size: 12px; }
+.api-error-banner button { display: grid; width: 24px; height: 24px; flex: 0 0 auto; margin-left: auto; place-items: center; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.api-loading-banner { margin-bottom: 12px; color: #66728e; font-size: 12px; }
+.api-loading-table { display: grid; min-height: 190px; place-items: center; color: #79849a; font-size: 13px; }
 
 @media (max-width: 760px) {
   .auth-screen { display: block; min-height: 100vh; background: #f5f6fa; }
