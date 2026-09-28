@@ -19,24 +19,19 @@ The project is not yet deployed and still uses a mock AI provider and local disk
    - Add one Playwright test covering: register → create application → change status → reload → verify persisted.
    - Gate CI on `npm test` in both `backend/` and `frontend/`.
 
-2. **Backend `tsc --noEmit` errors**
-   - `backend/src/lib/jwt.ts` and `backend/src/routes/auth.ts` have pre-existing strict-type errors that don't affect runtime (dev uses `tsx watch`). Fix before turning on strict CI type-check.
+2. **Production deployment — attempted, deferred**
+   - Backend was configured for Railway (Root Directory `backend`, Build `npm install && npx prisma generate && npm run build`, Start `npx prisma migrate deploy && node dist/server.js`) but Railway's pricing model (no free tier, ~$5/month minimum) made it a bad fit; deferred rather than paid.
+   - **Recommended next attempt:** Render (backend, free tier that sleeps when idle) + Neon (Postgres, free forever) + Cloudflare R2 (file storage, free 10 GB) + Vercel (frontend, free).
+   - **Already deployment-ready:** `FRONTEND_ORIGIN` and `UPLOAD_ROOT` are wired as env vars in `backend/src/config/env.ts`; secrets are `.env`-based and not in source; `tsc -p tsconfig.json` builds cleanly.
+   - **Still needed before real users:** swap `backend/src/services/aiService.ts` mock for a real AI provider, swap local disk uploads for R2/S3 (or a Render volume), rate-limit `/auth/login`, rotate JWTs on password change.
 
-3. **Production readiness**
-   - Swap the mock AI service (`backend/src/services/aiService.ts`) for a real provider; record provider + model per AI-003.
-   - Swap local disk uploads (`backend/uploads/`) for S3 or equivalent.
-   - Move secrets out of source (Postgres URL, JWT secret, AI key, storage creds).
-   - Add rate limiting on `/auth/login`.
-   - Rotate/invalidate JWTs on password change.
-   - Deploy backend + Postgres + frontend; verify migrations and CORS for the prod frontend origin.
-
-4. **Delete account endpoint**
+3. **Delete account endpoint**
    - The Settings page has a disabled "Delete account" row. Needs a backend `DELETE /auth/me` route (cascade delete applications, documents, analyses) plus the UI wiring.
 
 ### Post-MVP (skip unless you want them)
 
-5. Chrome extension: EXT-001, EXT-002, EXT-003.
-6. Email integration: EMAIL-001 through EMAIL-004.
+4. Chrome extension: EXT-001, EXT-002, EXT-003.
+5. Email integration: EMAIL-001 through EMAIL-004.
 
 ## Project Documents
 

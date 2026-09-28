@@ -108,7 +108,7 @@ router.post('/login', async (req, res) => {
 // Return the current authenticated user.
 router.get('/me', requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
-    where: { id: req.user.id },
+    where: { id: req.user!.id },
     select: {
       id: true,
       email: true,
@@ -149,7 +149,7 @@ router.patch('/me', requireAuth, async (req, res) => {
       : displayName.trim() || null;
 
   const user = await prisma.user.update({
-    where: { id: req.user.id },
+    where: { id: req.user!.id },
     data: normalized === undefined ? {} : { displayName: normalized },
     select: {
       id: true,
@@ -182,7 +182,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
 
   const { currentPassword, newPassword } = parsed.data;
 
-  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
   if (!user) {
     return sendUnauthorized(res, 'User not found');
   }

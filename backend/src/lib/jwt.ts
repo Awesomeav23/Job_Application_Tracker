@@ -4,9 +4,10 @@ import { env } from '../config/env';
 // Create a signed JWT for a specific user.
 // The payload includes the user ID and the secret is read from environment variables.
 export function signToken(userId: string) {
-  return jwt.sign({ userId }, env.JWT_SECRET, {
-    expiresIn: env.JWT_EXPIRES_IN,
-  });
+  const options: jwt.SignOptions = {
+    expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+  };
+  return jwt.sign({ userId }, env.JWT_SECRET, options);
 }
 
 // Verify that a token is valid and return the user ID embedded in it.
