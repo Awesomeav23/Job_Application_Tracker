@@ -1297,13 +1297,33 @@ function App() {
                               <text key={ts + '-' + i} x={xOf(ts)} y={height - padBottom + 18} className="activity-axis-label" textAnchor="middle">{label}</text>
                             )
                           })}
-                          {recent.length > 1 && (
-                            <polyline
-                              className="activity-trend-line"
-                              fill="none"
-                              points={recent.map((application) => `${xOf(new Date(application.dateApplied).getTime())},${yOf(stageForStatus[application.status])}`).join(' ')}
-                            />
-                          )}
+                          {recent.length > 1 && (() => {
+                            // Least-squares linear regression through the 20 points:
+                            // shows the overall pipeline-stage trend across time.
+                            const xs = recent.map((application) => new Date(application.dateApplied).getTime())
+                            const ys = recent.map((application) => stageForStatus[application.status])
+                            const meanX = xs.reduce((a, b) => a + b, 0) / xs.length
+                            const meanY = ys.reduce((a, b) => a + b, 0) / ys.length
+                            let numerator = 0
+                            let denominator = 0
+                            for (let i = 0; i < xs.length; i++) {
+                              numerator += (xs[i] - meanX) * (ys[i] - meanY)
+                              denominator += (xs[i] - meanX) ** 2
+                            }
+                            const slope = denominator === 0 ? 0 : numerator / denominator
+                            const intercept = meanY - slope * meanX
+                            const y1 = slope * minDate + intercept
+                            const y2 = slope * maxDate + intercept
+                            return (
+                              <line
+                                className="activity-trend-line"
+                                x1={xOf(minDate)}
+                                y1={yOf(y1)}
+                                x2={xOf(maxDate)}
+                                y2={yOf(y2)}
+                              />
+                            )
+                          })()}
                           {recent.map((application) => {
                             const stage = stageForStatus[application.status]
                             const ts = new Date(application.dateApplied).getTime()
