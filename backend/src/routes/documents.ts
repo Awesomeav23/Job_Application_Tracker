@@ -1,36 +1,20 @@
-import fs from 'fs';
-import path from 'path';
 import { Router } from 'express';
-import multer from 'multer';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth';
 import { archiveDocument, createDocument, deleteDocument, getDocument, getDocumentFile, listDocuments, unarchiveDocument, updateDocument } from '../services/documentService';
 import { sendValidationError } from '../utils/errors';
+import { parseMultipart } from '../lib/multipart';
 
 const router = Router();
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024,
-  },
-  fileFilter: (_req, file, cb) => {
-    const allowed = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'application/rtf',
-      'application/vnd.oasis.opendocument.text',
-    ];
 
-    if (allowed.includes(file.mimetype) || file.mimetype.startsWith('text/')) {
-      cb(null, true);
-      return;
-    }
-
-    cb(new Error('UNSUPPORTED_FILE_TYPE'));
-  },
-});
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'application/rtf',
+  'application/vnd.oasis.opendocument.text',
+];
 
 const documentCreateSchema = z.object({
   kind: z.enum(['RESUME', 'COVER_LETTER']),
@@ -58,28 +42,35 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', upload.single('file'), async (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    if (!req.file) {
+    const { fields, files } = await parseMultipart(req);
+    const file = files['file'];
+
+    if (!file) {
       return res.status(400).json({ error: { code: 'VALIDATION_FAILED', message: 'A file is required', fields: { file: 'File is required' } } });
     }
 
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype) && !file.mimetype.startsWith('text/')) {
+      return res.status(415).json({ error: { code: 'UNSUPPORTED_FILE_TYPE', message: 'Unsupported file type' } });
+    }
+
     const parsed = documentCreateSchema.safeParse({
-      kind: req.body.kind,
-      label: req.body.label,
-      version: req.body.version,
+      kind: fields.kind,
+      label: fields.label,
+      version: fields.version,
     });
 
     if (!parsed.success) {
-      const fields: Record<string, string> = {};
+      const fieldErrors: Record<string, string> = {};
       for (const issue of parsed.error.issues) {
         const field = issue.path.join('.') || 'body';
-        fields[field] = issue.message;
+        fieldErrors[field] = issue.message;
       }
-      return sendValidationError(res, fields);
+      return sendValidationError(res, fieldErrors);
     }
 
-    const document = await createDocument(req.user!.id, req.file, parsed.data);
+    const document = await createDocument(req.user!.id, file, parsed.data);
     return res.status(201).json(document);
   } catch (error: any) {
     if (error.code === 'VALIDATION_FAILED') {
@@ -100,6 +91,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       return res.status(415).json({ error: { code: 'UNSUPPORTED_FILE_TYPE', message: 'Unsupported file type' } });
     }
 
+    console.error('Document upload error:', error);
     return res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Unable to upload document' } });
   }
 });
