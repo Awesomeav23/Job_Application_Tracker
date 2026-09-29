@@ -2,6 +2,7 @@
   "version": 2,
   "buildCommand": "npx prisma generate && npm run build",
   "installCommand": "npm install",
+  "outputDirectory": "public",
   "framework": null,
   "rewrites": [
     { "source": "/(.*)", "destination": "/api" }
