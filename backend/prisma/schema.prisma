@@ -5,7 +5,8 @@
 // bottom, commented out, so Milestone 10 does not require a redesign.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -146,11 +147,14 @@ model Document {
   label   String // RES-002, e.g. "Software Engineer Resume v4"
   version String? // optional explicit version for sorting/display
 
-  // Storage metadata. The file itself lives on disk or S3, never in Postgres.
+  // Storage metadata. File bytes live in `content` for serverless deploys
+  // where no persistent disk exists (Vercel). storageKey retained for
+  // compatibility with older rows / potential S3 migration.
   storageKey       String @unique
   originalFileName String
   mimeType         String
   sizeBytes        Int
+  content          Bytes?
 
   /// Extracted plain text, used as AI-001 input. Nullable so extraction can
   /// move between upload time and analysis time without a migration.

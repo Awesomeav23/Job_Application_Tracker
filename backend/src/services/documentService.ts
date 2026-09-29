@@ -1,20 +1,10 @@
-import fs from 'fs';
 import path from 'path';
 import mammoth from 'mammoth';
 import { PDFParse } from 'pdf-parse';
-import { env } from '../config/env';
 import { prisma } from '../config/prisma';
-
-const STORAGE_ROOT = env.UPLOAD_ROOT
-  ? path.resolve(env.UPLOAD_ROOT)
-  : path.resolve(process.cwd(), 'uploads');
 
 function buildStorageKey(userId: string, fileName: string) {
   return path.posix.join('documents', userId, fileName).replace('\\', '/');
-}
-
-function ensureStorageDirectory() {
-  return fs.promises.mkdir(STORAGE_ROOT, { recursive: true });
 }
 
 function sanitizeFileName(fileName: string) {
@@ -76,6 +66,22 @@ export async function listDocuments(userId: string, kind?: 'RESUME' | 'COVER_LET
       ...(includeArchived ? {} : { archivedAt: null }),
     },
     orderBy: { createdAt: 'desc' },
+    // Exclude content (file bytes) from list queries to keep responses light.
+    select: {
+      id: true,
+      userId: true,
+      kind: true,
+      label: true,
+      version: true,
+      storageKey: true,
+      originalFileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      extractedText: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   return { items: documents, total: documents.length };
@@ -124,11 +130,6 @@ export async function createDocument(
   const safeBaseName = sanitizeFileName(path.basename(file.originalname || 'document', extension));
   const storageName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeBaseName}${extension}`;
   const storageKey = buildStorageKey(userId, storageName);
-  const finalPath = path.join(STORAGE_ROOT, storageKey);
-
-  await ensureStorageDirectory();
-  await fs.promises.mkdir(path.dirname(finalPath), { recursive: true });
-  await fs.promises.writeFile(finalPath, file.buffer);
 
   const document = await prisma.document.create({
     data: {
@@ -140,7 +141,23 @@ export async function createDocument(
       originalFileName: file.originalname || 'document',
       mimeType: file.mimetype,
       sizeBytes: file.size,
+      content: new Uint8Array(file.buffer),
       extractedText: await extractedTextFromBuffer(file.buffer, file.mimetype),
+    },
+    select: {
+      id: true,
+      userId: true,
+      kind: true,
+      label: true,
+      version: true,
+      storageKey: true,
+      originalFileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      extractedText: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
 
@@ -150,6 +167,21 @@ export async function createDocument(
 export async function getDocument(userId: string, documentId: string) {
   const document = await prisma.document.findFirst({
     where: { id: documentId, userId },
+    select: {
+      id: true,
+      userId: true,
+      kind: true,
+      label: true,
+      version: true,
+      storageKey: true,
+      originalFileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      extractedText: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   if (!document) {
@@ -179,17 +211,47 @@ export async function updateDocument(userId: string, documentId: string, input: 
       ...(label !== undefined ? { label } : {}),
       ...(input.version !== undefined ? { version } : {}),
     },
+    select: {
+      id: true,
+      userId: true,
+      kind: true,
+      label: true,
+      version: true,
+      storageKey: true,
+      originalFileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      extractedText: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   return updated;
 }
 
 export async function archiveDocument(userId: string, documentId: string) {
-  const document = await getDocument(userId, documentId);
+  await getDocument(userId, documentId);
 
   return prisma.document.update({
     where: { id: documentId },
     data: { archivedAt: new Date() },
+    select: {
+      id: true,
+      userId: true,
+      kind: true,
+      label: true,
+      version: true,
+      storageKey: true,
+      originalFileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      extractedText: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }
 
@@ -199,11 +261,26 @@ export async function unarchiveDocument(userId: string, documentId: string) {
   return prisma.document.update({
     where: { id: documentId },
     data: { archivedAt: null },
+    select: {
+      id: true,
+      userId: true,
+      kind: true,
+      label: true,
+      version: true,
+      storageKey: true,
+      originalFileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      extractedText: true,
+      archivedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 }
 
 export async function deleteDocument(userId: string, documentId: string) {
-  const document = await getDocument(userId, documentId);
+  await getDocument(userId, documentId);
 
   const analysisCount = await prisma.analysis.count({ where: { documentId } });
   if (analysisCount > 0) {
@@ -214,25 +291,30 @@ export async function deleteDocument(userId: string, documentId: string) {
     throw error;
   }
 
-  const filePath = path.join(STORAGE_ROOT, document.storageKey);
-  await fs.promises.unlink(filePath).catch(() => undefined);
-
   await prisma.document.delete({ where: { id: documentId } });
   return true;
 }
 
 export async function getDocumentFile(userId: string, documentId: string) {
-  const document = await getDocument(userId, documentId);
-  const filePath = path.join(STORAGE_ROOT, document.storageKey);
+  const document = await prisma.document.findFirst({
+    where: { id: documentId, userId },
+  });
 
-  try {
-    const fileBuffer = await fs.promises.readFile(filePath);
-    return { fileBuffer, document };
-  } catch {
+  if (!document) {
+    const error = new Error('Document not found') as Error & { statusCode?: number };
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (!document.content) {
     const error = new Error('Stored file not found') as Error & { statusCode?: number };
     error.statusCode = 404;
     throw error;
   }
+
+  const fileBuffer = Buffer.from(document.content);
+  const { content: _content, ...documentWithoutContent } = document;
+  return { fileBuffer, document: documentWithoutContent };
 }
 
 export function validateDocumentAttachmentKind(kind: 'RESUME' | 'COVER_LETTER', expected: 'RESUME' | 'COVER_LETTER') {
