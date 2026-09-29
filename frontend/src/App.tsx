@@ -1265,23 +1265,56 @@ function App() {
                 ) : activity.length === 0 ? (
                   <div className="empty-state"><CalendarDays size={22} /><strong>No activity yet</strong><span>Once you add applications, weekly activity will appear here.</span></div>
                 ) : (
-                  <div className="activity-chart">
-                    {(() => {
-                      const maxValue = Math.max(1, ...activity.map((bucket) => Math.max(bucket.created, bucket.applied)))
-                      return activity.map((bucket) => {
-                        const label = new Date(bucket.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                        return (
-                          <div className="activity-bucket" key={bucket.periodStart} title={`Week of ${label}: ${bucket.created} created, ${bucket.applied} applied`}>
-                            <div className="activity-bars">
-                              <span className="activity-bar activity-bar-created" style={{ height: `${(bucket.created / maxValue) * 100}%` }} aria-label={`${bucket.created} created`} />
-                              <span className="activity-bar activity-bar-applied" style={{ height: `${(bucket.applied / maxValue) * 100}%` }} aria-label={`${bucket.applied} applied`} />
-                            </div>
-                            <span className="activity-label">{label}</span>
-                          </div>
-                        )
-                      })
-                    })()}
-                  </div>
+                  (() => {
+                    const width = 720
+                    const height = 220
+                    const padLeft = 34
+                    const padRight = 12
+                    const padTop = 16
+                    const padBottom = 32
+                    const innerWidth = width - padLeft - padRight
+                    const innerHeight = height - padTop - padBottom
+                    const maxValue = Math.max(1, ...activity.map((bucket) => Math.max(bucket.created, bucket.applied)))
+                    const step = activity.length > 1 ? innerWidth / (activity.length - 1) : 0
+                    const xOf = (index: number) => padLeft + (activity.length > 1 ? step * index : innerWidth / 2)
+                    const yOf = (value: number) => padTop + innerHeight - (value / maxValue) * innerHeight
+                    const createdPoints = activity.map((bucket, index) => `${xOf(index)},${yOf(bucket.created)}`).join(' ')
+                    const appliedPoints = activity.map((bucket, index) => `${xOf(index)},${yOf(bucket.applied)}`).join(' ')
+                    const gridLines = 4
+                    const ticks = Array.from({ length: gridLines + 1 }, (_, i) => Math.round((maxValue * i) / gridLines))
+                    return (
+                      <div className="activity-chart">
+                        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Weekly application activity trend" preserveAspectRatio="none">
+                          {ticks.map((tick, i) => {
+                            const y = padTop + innerHeight - (i / gridLines) * innerHeight
+                            return (
+                              <g key={tick + '-' + i}>
+                                <line x1={padLeft} y1={y} x2={width - padRight} y2={y} className="activity-grid" />
+                                <text x={padLeft - 6} y={y + 3} className="activity-axis-label" textAnchor="end">{tick}</text>
+                              </g>
+                            )
+                          })}
+                          <polyline points={createdPoints} className="activity-line activity-line-created" fill="none" />
+                          <polyline points={appliedPoints} className="activity-line activity-line-applied" fill="none" />
+                          {activity.map((bucket, index) => (
+                            <g key={bucket.periodStart}>
+                              <circle cx={xOf(index)} cy={yOf(bucket.created)} r={3.5} className="activity-point activity-point-created" />
+                              <circle cx={xOf(index)} cy={yOf(bucket.applied)} r={3.5} className="activity-point activity-point-applied" />
+                              <title>Week of {new Date(bucket.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: {bucket.created} created, {bucket.applied} applied</title>
+                            </g>
+                          ))}
+                          {activity.map((bucket, index) => {
+                            const label = new Date(bucket.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            const showLabel = activity.length <= 8 || index % Math.ceil(activity.length / 8) === 0 || index === activity.length - 1
+                            if (!showLabel) return null
+                            return (
+                              <text key={bucket.periodStart + '-x'} x={xOf(index)} y={height - padBottom + 16} className="activity-axis-label" textAnchor="middle">{label}</text>
+                            )
+                          })}
+                        </svg>
+                      </div>
+                    )
+                  })()
                 )}
                 <div className="activity-legend">
                   <span><span className="activity-swatch activity-swatch-created" /> Created</span>

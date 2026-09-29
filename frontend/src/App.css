@@ -1014,19 +1014,22 @@
 .stats-secondary strong { color: #1e2a4d; font-size: 18px; }
 
 .activity-panel { padding: 22px; margin-top: 18px; }
-.activity-chart { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(28px, 1fr); gap: 10px; align-items: end; height: 180px; padding: 12px 4px 6px; }
-.activity-bucket { display: flex; flex-direction: column; align-items: center; gap: 8px; height: 100%; }
-.activity-bars { display: flex; gap: 3px; align-items: flex-end; width: 100%; height: 100%; }
-.activity-bar { flex: 1; min-height: 2px; border-radius: 3px 3px 0 0; transition: transform 120ms ease; }
-.activity-bar:hover { transform: scaleY(1.03); }
-.activity-bar-created { background: #4a5aa8; }
-.activity-bar-applied { background: #86c5b7; }
-.activity-label { color: #6d7692; font-size: 9px; font-weight: 600; letter-spacing: 0.2px; text-align: center; }
-.activity-legend { display: flex; gap: 16px; margin-top: 8px; color: #4a5573; font-size: 11px; font-weight: 500; }
+.activity-chart { padding: 8px 4px 4px; }
+.activity-chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.activity-grid { stroke: #e6e9f0; stroke-width: 1; stroke-dasharray: 3 4; }
+.activity-axis-label { fill: #6d7692; font-size: 10px; font-weight: 500; font-family: var(--body); }
+.activity-line { stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; }
+.activity-line-created { stroke: #4a5aa8; }
+.activity-line-applied { stroke: #29a55b; }
+.activity-point { stroke: #fff; stroke-width: 1.5; transition: r 120ms ease; }
+.activity-point-created { fill: #4a5aa8; }
+.activity-point-applied { fill: #29a55b; }
+.activity-point:hover { r: 5.5; }
+.activity-legend { display: flex; gap: 16px; margin-top: 12px; color: #4a5573; font-size: 11px; font-weight: 500; }
 .activity-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .activity-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 .activity-swatch-created { background: #4a5aa8; }
-.activity-swatch-applied { background: #86c5b7; }
+.activity-swatch-applied { background: #29a55b; }
 
 .upcoming-row-button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; text-align: left; }
 .upcoming-row-button:hover { border-color: #e0e4ef; background: #fafbfe; }
