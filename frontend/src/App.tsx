@@ -144,7 +144,7 @@ type ApplicationModalTab = 'details' | 'ai'
 const statuses: Status[] = ['SAVED', 'APPLIED', 'RECRUITER_SCREEN', 'INTERVIEW', 'OFFER', 'REJECTED', 'WITHDRAWN']
 const sources = ['MANUAL', 'EXTENSION'] as const
 const SAVED_EMAILS_KEY = 'fieldnote.savedEmails'
-const SAMPLE_SEEDED_PREFIX = 'fieldnote.sampleApplicationsSeeded.v2:'
+const SAMPLE_SEEDED_PREFIX = 'fieldnote.sampleApplicationsSeeded.v3:'
 
 function getSavedEmails(): string[] {
   try {
@@ -212,7 +212,7 @@ const sampleNotes = [
   'Check the role requirements against the portfolio.',
 ] as const
 
-const sampleApplications = Array.from({ length: 84 }, (_, index) => {
+const baseSampleApplications = Array.from({ length: 84 }, (_, index) => {
   const company = sampleCompanies[Math.floor(index / sampleRoles.length)]
   const role = sampleRoles[index % sampleRoles.length]
   const status = statuses[(index * 3) % statuses.length]
@@ -228,6 +228,38 @@ const sampleApplications = Array.from({ length: 84 }, (_, index) => {
     daysAgo: (index * 11) % 91,
   }
 })
+
+// Second batch: recent interview- and offer-heavy applications so the
+// trend line has a story to tell (interview rate climbing over time).
+const recentInterviewBatch: Array<{
+  company: string
+  jobTitle: string
+  jobDescription: string
+  status: Status
+  location: string
+  salary: string
+  url: string
+  notes: string
+  daysAgo: number
+}> = [
+  { company: 'Northstar Analytics', jobTitle: 'Senior Data Analyst', jobDescription: 'Lead analytics for the growth pod, mentor junior analysts, and drive experiment design.', status: 'INTERVIEW', location: 'Remote · US', salary: '$118,000–$142,000', url: 'https://example.com/jobs/northstar-senior-data-analyst', notes: 'Onsite panel next Tuesday.', daysAgo: 3 },
+  { company: 'Cedar Labs', jobTitle: 'Full Stack Engineer', jobDescription: 'Own features end-to-end across React and Node services.', status: 'OFFER', location: 'Boston, MA · Hybrid', salary: '$140,000–$168,000', url: 'https://example.com/jobs/cedar-full-stack-engineer', notes: 'Offer received, negotiating equity.', daysAgo: 6 },
+  { company: 'Harbor Health', jobTitle: 'Clinical Analytics Manager', jobDescription: 'Own reporting for population health programs.', status: 'INTERVIEW', location: 'Remote · US', salary: '$132,000–$158,000', url: 'https://example.com/jobs/harbor-clinical-analytics', notes: 'Case study submitted, awaiting feedback.', daysAgo: 5 },
+  { company: 'Juniper Works', jobTitle: 'Growth Product Manager', jobDescription: 'Drive activation and retention experiments.', status: 'INTERVIEW', location: 'Chicago, IL', salary: '$128,000–$150,000', url: 'https://example.com/jobs/juniper-growth-pm', notes: 'Meeting the CPO on Thursday.', daysAgo: 8 },
+  { company: 'Mosaic Learning', jobTitle: 'Learning Experience Designer', jobDescription: 'Design K-12 curriculum modules and instructor tooling.', status: 'INTERVIEW', location: 'Remote · US', salary: '$96,000–$118,000', url: 'https://example.com/jobs/mosaic-lx-designer', notes: 'Portfolio walkthrough scheduled.', daysAgo: 10 },
+  { company: 'Redwood Mobility', jobTitle: 'Machine Learning Engineer', jobDescription: 'Build routing models for last-mile logistics.', status: 'OFFER', location: 'Portland, OR · Hybrid', salary: '$155,000–$185,000', url: 'https://example.com/jobs/redwood-ml-engineer', notes: 'Verbal offer, written to follow.', daysAgo: 12 },
+  { company: 'Blue Oak Finance', jobTitle: 'Senior Backend Engineer', jobDescription: 'Design payment infrastructure and internal risk services.', status: 'INTERVIEW', location: 'New York, NY', salary: '$168,000–$198,000', url: 'https://example.com/jobs/blue-oak-senior-backend', notes: 'System design round next week.', daysAgo: 14 },
+  { company: 'Summit Climate', jobTitle: 'Data Engineering Lead', jobDescription: 'Own the emissions data pipeline from ingest to reporting.', status: 'INTERVIEW', location: 'Denver, CO · Hybrid', salary: '$148,000–$172,000', url: 'https://example.com/jobs/summit-data-eng-lead', notes: 'Team fit interview booked.', daysAgo: 17 },
+  { company: 'Atlas Commerce', jobTitle: 'Staff Software Engineer', jobDescription: 'Lead architecture for the merchant platform.', status: 'INTERVIEW', location: 'Remote · US', salary: '$185,000–$220,000', url: 'https://example.com/jobs/atlas-staff-engineer', notes: 'Awaiting hiring manager sync.', daysAgo: 20 },
+  { company: 'Kindred Care', jobTitle: 'Product Analytics Lead', jobDescription: 'Bring product decisions closer to patient outcomes.', status: 'RECRUITER_SCREEN', location: 'Austin, TX', salary: '$134,000–$158,000', url: 'https://example.com/jobs/kindred-product-analytics', notes: 'Recruiter follow-up on Friday.', daysAgo: 22 },
+  { company: 'Lantern Studio', jobTitle: 'Senior Product Designer', jobDescription: 'Shape the studio\'s flagship editing tools.', status: 'APPLIED', location: 'Los Angeles, CA · Hybrid', salary: '$130,000–$156,000', url: 'https://example.com/jobs/lantern-senior-product-designer', notes: 'Applied through referral.', daysAgo: 26 },
+  { company: 'Fieldstone Systems', jobTitle: 'Platform Engineer', jobDescription: 'Own the internal developer platform and CI/CD tooling.', status: 'APPLIED', location: 'Seattle, WA', salary: '$150,000–$180,000', url: 'https://example.com/jobs/fieldstone-platform-engineer', notes: 'Awaiting first response.', daysAgo: 30 },
+  { company: 'Northstar Analytics', jobTitle: 'Analytics Engineer', jobDescription: 'Model core business metrics in dbt.', status: 'REJECTED', location: 'Remote · US', salary: '$118,000–$140,000', url: 'https://example.com/jobs/northstar-analytics-engineer', notes: 'Team paused hiring.', daysAgo: 38 },
+  { company: 'Cedar Labs', jobTitle: 'Frontend Engineer', jobDescription: 'Ship React features and improve design-system adoption.', status: 'APPLIED', location: 'Boston, MA · Hybrid', salary: '$120,000–$146,000', url: 'https://example.com/jobs/cedar-frontend-engineer', notes: 'Application submitted.', daysAgo: 44 },
+  { company: 'Harbor Health', jobTitle: 'Data Scientist', jobDescription: 'Predictive models for chronic-care programs.', status: 'REJECTED', location: 'Remote · US', salary: '$132,000–$158,000', url: 'https://example.com/jobs/harbor-data-scientist', notes: 'Role closed after final round.', daysAgo: 55 },
+]
+
+const sampleApplications = [...baseSampleApplications, ...recentInterviewBatch]
 
 function formatDate(value: string) {
   if (!value) return 'Not set'
