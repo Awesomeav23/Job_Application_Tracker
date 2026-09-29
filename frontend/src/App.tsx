@@ -103,17 +103,6 @@ interface AnalyticsSummary {
   averageResponseDays: number | null
 }
 
-interface ActivityBucket {
-  periodStart: string
-  created: number
-  applied: number
-}
-
-interface ActivityResponse {
-  bucket: 'day' | 'week'
-  series: ActivityBucket[]
-}
-
 interface AnalysisDocumentRef {
   id: string
   label: string
@@ -414,7 +403,6 @@ function App() {
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState('')
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null)
-  const [activity, setActivity] = useState<ActivityBucket[]>([])
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false)
   const [modalTab, setModalTab] = useState<ApplicationModalTab>('details')
   const [analyses, setAnalyses] = useState<Analysis[]>([])
@@ -564,12 +552,8 @@ function App() {
 
   async function refreshAnalytics() {
     try {
-      const [summary, activityResponse] = await Promise.all([
-        apiFetch<AnalyticsSummary>('/analytics'),
-        apiFetch<ActivityResponse>('/analytics/activity?bucket=week'),
-      ])
+      const summary = await apiFetch<AnalyticsSummary>('/analytics')
       setAnalytics(summary)
-      setActivity(activityResponse.series)
     } catch {
       // analytics is a secondary read; surface silently and let the user retry via reload
     } finally {
@@ -726,7 +710,6 @@ function App() {
       resetUploadForm()
       setDocumentTab('RESUME')
       setAnalytics(null)
-      setActivity([])
       setAnalyticsLoaded(false)
       setAnalyses([])
       setAnalysesLoaded(false)
@@ -833,7 +816,6 @@ function App() {
     setRenameValue('')
     setDocumentDeleteTarget(null)
     setAnalytics(null)
-    setActivity([])
     setAnalyticsLoaded(false)
     setAnalyses([])
     setAnalysesLoaded(false)
@@ -1259,56 +1241,70 @@ function App() {
                 </article>
               </section>
               <section className="panel activity-panel">
-                <div className="widget-heading"><div><h2>Activity over time</h2><p>Applications created and applied to, weekly.</p></div></div>
-                {analyticsLoading ? (
-                  <div className="api-loading-table">Loading activity…</div>
-                ) : activity.length === 0 ? (
-                  <div className="empty-state"><CalendarDays size={22} /><strong>No activity yet</strong><span>Once you add applications, weekly activity will appear here.</span></div>
+                <div className="widget-heading"><div><h2>Recent applications</h2><p>Your latest 20 applications plotted by date and pipeline stage.</p></div></div>
+                {applicationsLoading ? (
+                  <div className="api-loading-table">Loading applications…</div>
+                ) : applications.length === 0 ? (
+                  <div className="empty-state"><CalendarDays size={22} /><strong>No applications yet</strong><span>Add applications to see their status distribution over time.</span></div>
                 ) : (
                   (() => {
+                    const stageForStatus: Record<Status, number> = {
+                      SAVED: 0,
+                      APPLIED: 1,
+                      RECRUITER_SCREEN: 2,
+                      INTERVIEW: 3,
+                      OFFER: 4,
+                      REJECTED: 5,
+                      WITHDRAWN: 5,
+                    }
+                    const stageLabels = ['Saved', 'Applied', 'Screen', 'Interview', 'Offer', 'Rejected']
+                    const recent = applications
+                      .slice()
+                      .sort((a, b) => new Date(b.dateApplied).getTime() - new Date(a.dateApplied).getTime())
+                      .slice(0, 20)
+                      .reverse()
+                    const dates = recent.map((application) => new Date(application.dateApplied).getTime())
+                    const minDate = Math.min(...dates)
+                    const maxDate = Math.max(...dates)
+                    const dateRange = Math.max(1, maxDate - minDate)
                     const width = 720
-                    const height = 220
-                    const padLeft = 34
-                    const padRight = 12
-                    const padTop = 16
-                    const padBottom = 32
+                    const height = 260
+                    const padLeft = 70
+                    const padRight = 14
+                    const padTop = 14
+                    const padBottom = 34
                     const innerWidth = width - padLeft - padRight
                     const innerHeight = height - padTop - padBottom
-                    const maxValue = Math.max(1, ...activity.map((bucket) => Math.max(bucket.created, bucket.applied)))
-                    const step = activity.length > 1 ? innerWidth / (activity.length - 1) : 0
-                    const xOf = (index: number) => padLeft + (activity.length > 1 ? step * index : innerWidth / 2)
-                    const yOf = (value: number) => padTop + innerHeight - (value / maxValue) * innerHeight
-                    const createdPoints = activity.map((bucket, index) => `${xOf(index)},${yOf(bucket.created)}`).join(' ')
-                    const appliedPoints = activity.map((bucket, index) => `${xOf(index)},${yOf(bucket.applied)}`).join(' ')
-                    const gridLines = 4
-                    const ticks = Array.from({ length: gridLines + 1 }, (_, i) => Math.round((maxValue * i) / gridLines))
+                    const xOf = (ts: number) => padLeft + ((ts - minDate) / dateRange) * innerWidth
+                    const yOf = (stage: number) => padTop + innerHeight - (stage / (stageLabels.length - 1)) * innerHeight
+                    const tickCount = Math.min(6, recent.length)
+                    const dateTicks = Array.from({ length: tickCount }, (_, i) => minDate + ((maxDate - minDate) * i) / Math.max(1, tickCount - 1))
                     return (
                       <div className="activity-chart">
-                        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Weekly application activity trend" preserveAspectRatio="none">
-                          {ticks.map((tick, i) => {
-                            const y = padTop + innerHeight - (i / gridLines) * innerHeight
+                        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Recent applications scatter plot" preserveAspectRatio="none">
+                          {stageLabels.map((label, stage) => {
+                            const y = yOf(stage)
                             return (
-                              <g key={tick + '-' + i}>
+                              <g key={label + '-' + stage}>
                                 <line x1={padLeft} y1={y} x2={width - padRight} y2={y} className="activity-grid" />
-                                <text x={padLeft - 6} y={y + 3} className="activity-axis-label" textAnchor="end">{tick}</text>
+                                <text x={padLeft - 8} y={y + 3} className="activity-axis-label" textAnchor="end">{label}</text>
                               </g>
                             )
                           })}
-                          <polyline points={createdPoints} className="activity-line activity-line-created" fill="none" />
-                          <polyline points={appliedPoints} className="activity-line activity-line-applied" fill="none" />
-                          {activity.map((bucket, index) => (
-                            <g key={bucket.periodStart}>
-                              <circle cx={xOf(index)} cy={yOf(bucket.created)} r={3.5} className="activity-point activity-point-created" />
-                              <circle cx={xOf(index)} cy={yOf(bucket.applied)} r={3.5} className="activity-point activity-point-applied" />
-                              <title>Week of {new Date(bucket.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: {bucket.created} created, {bucket.applied} applied</title>
-                            </g>
-                          ))}
-                          {activity.map((bucket, index) => {
-                            const label = new Date(bucket.periodStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                            const showLabel = activity.length <= 8 || index % Math.ceil(activity.length / 8) === 0 || index === activity.length - 1
-                            if (!showLabel) return null
+                          {dateTicks.map((ts, i) => {
+                            const label = new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                             return (
-                              <text key={bucket.periodStart + '-x'} x={xOf(index)} y={height - padBottom + 16} className="activity-axis-label" textAnchor="middle">{label}</text>
+                              <text key={ts + '-' + i} x={xOf(ts)} y={height - padBottom + 18} className="activity-axis-label" textAnchor="middle">{label}</text>
+                            )
+                          })}
+                          {recent.map((application) => {
+                            const stage = stageForStatus[application.status]
+                            const ts = new Date(application.dateApplied).getTime()
+                            return (
+                              <g key={application.id}>
+                                <circle cx={xOf(ts)} cy={yOf(stage)} r={6} className={`activity-scatter-point status-scatter-${application.status.toLowerCase()}`} />
+                                <title>{application.jobTitle} · {application.company} — {statusLabels[application.status]} ({new Date(application.dateApplied).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})</title>
+                              </g>
                             )
                           })}
                         </svg>
@@ -1317,8 +1313,12 @@ function App() {
                   })()
                 )}
                 <div className="activity-legend">
-                  <span><span className="activity-swatch activity-swatch-created" /> Created</span>
-                  <span><span className="activity-swatch activity-swatch-applied" /> Applied</span>
+                  <span><span className="activity-swatch scatter-swatch-saved" /> Saved</span>
+                  <span><span className="activity-swatch scatter-swatch-applied" /> Applied</span>
+                  <span><span className="activity-swatch scatter-swatch-recruiter_screen" /> Screen</span>
+                  <span><span className="activity-swatch scatter-swatch-interview" /> Interview</span>
+                  <span><span className="activity-swatch scatter-swatch-offer" /> Offer</span>
+                  <span><span className="activity-swatch scatter-swatch-rejected" /> Rejected</span>
                 </div>
               </section>
             </>

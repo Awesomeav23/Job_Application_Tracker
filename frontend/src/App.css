@@ -1025,11 +1025,28 @@
 .activity-point-created { fill: #4a5aa8; }
 .activity-point-applied { fill: #29a55b; }
 .activity-point:hover { r: 5.5; }
-.activity-legend { display: flex; gap: 16px; margin-top: 12px; color: #4a5573; font-size: 11px; font-weight: 500; }
+.activity-legend { display: flex; flex-wrap: wrap; gap: 12px 16px; margin-top: 12px; color: #4a5573; font-size: 11px; font-weight: 500; }
 .activity-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.activity-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.activity-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .activity-swatch-created { background: #4a5aa8; }
 .activity-swatch-applied { background: #29a55b; }
+
+.activity-scatter-point { stroke: #fff; stroke-width: 2; transition: r 120ms ease; cursor: pointer; }
+.activity-scatter-point:hover { r: 8; }
+.status-scatter-saved { fill: #a6b598; }
+.status-scatter-applied { fill: #4a7fd6; }
+.status-scatter-recruiter_screen { fill: #7193a0; }
+.status-scatter-interview { fill: #e08c3c; }
+.status-scatter-offer { fill: #29a55b; }
+.status-scatter-rejected { fill: #d63f3f; }
+.status-scatter-withdrawn { fill: #989795; }
+
+.scatter-swatch-saved { background: #a6b598; }
+.scatter-swatch-applied { background: #4a7fd6; }
+.scatter-swatch-recruiter_screen { background: #7193a0; }
+.scatter-swatch-interview { background: #e08c3c; }
+.scatter-swatch-offer { background: #29a55b; }
+.scatter-swatch-rejected { background: #d63f3f; }
 
 .upcoming-row-button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; cursor: pointer; text-align: left; }
 .upcoming-row-button:hover { border-color: #e0e4ef; background: #fafbfe; }
