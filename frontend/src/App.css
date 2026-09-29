@@ -1031,7 +1031,8 @@
 .activity-swatch-created { background: #4a5aa8; }
 .activity-swatch-applied { background: #29a55b; }
 
-.activity-trend-line { stroke: #98a3c4; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 4 3; opacity: 0.75; }
+.activity-trend-line { stroke: #4f6ef7; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 5 4; opacity: 0.85; }
+.activity-trend-label { fill: #4f6ef7; font-size: 11px; font-weight: 600; font-family: var(--body); }
 .activity-scatter-point { stroke: #fff; stroke-width: 2; transition: r 120ms ease; cursor: pointer; }
 .activity-scatter-point:hover { r: 8; }
 .status-scatter-saved { fill: #a6b598; }

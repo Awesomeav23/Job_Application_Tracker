@@ -1241,7 +1241,7 @@ function App() {
                 </article>
               </section>
               <section className="panel activity-panel">
-                <div className="widget-heading"><div><h2>Recent applications</h2><p>Your latest 20 applications plotted by date and pipeline stage.</p></div></div>
+                <div className="widget-heading"><div><h2>Recent applications</h2><p>Your latest 20 applications by stage · trend line tracks interview-reach rate over time.</p></div></div>
                 {applicationsLoading ? (
                   <div className="api-loading-table">Loading applications…</div>
                 ) : applications.length === 0 ? (
@@ -1298,10 +1298,12 @@ function App() {
                             )
                           })}
                           {recent.length > 1 && (() => {
-                            // Least-squares linear regression through the 20 points:
-                            // shows the overall pipeline-stage trend across time.
+                            // Least-squares regression of interview-reached rate over time.
+                            // Each application scores 1 if it reached INTERVIEW/OFFER, else 0.
+                            // The trend line then shows whether recent apps are more likely
+                            // than older ones to advance to an interview.
                             const xs = recent.map((application) => new Date(application.dateApplied).getTime())
-                            const ys = recent.map((application) => stageForStatus[application.status])
+                            const ys: number[] = recent.map((application) => (application.status === 'INTERVIEW' || application.status === 'OFFER' ? 1 : 0))
                             const meanX = xs.reduce((a, b) => a + b, 0) / xs.length
                             const meanY = ys.reduce((a, b) => a + b, 0) / ys.length
                             let numerator = 0
@@ -1312,16 +1314,26 @@ function App() {
                             }
                             const slope = denominator === 0 ? 0 : numerator / denominator
                             const intercept = meanY - slope * meanX
-                            const y1 = slope * minDate + intercept
-                            const y2 = slope * maxDate + intercept
+                            // Map the 0-1 rate to the visual band between "Applied" (stage 1)
+                            // at rate 0 and "Interview" (stage 3) at rate 1, so the trend
+                            // line lands on stages the user is trying to reach.
+                            const rateToY = (rate: number) => yOf(1 + Math.max(0, Math.min(1, rate)) * 2)
+                            const y1 = rateToY(slope * minDate + intercept)
+                            const y2 = rateToY(slope * maxDate + intercept)
+                            const interviewCount = ys.reduce((a, b) => a + b, 0)
                             return (
-                              <line
-                                className="activity-trend-line"
-                                x1={xOf(minDate)}
-                                y1={yOf(y1)}
-                                x2={xOf(maxDate)}
-                                y2={yOf(y2)}
-                              />
+                              <>
+                                <line
+                                  className="activity-trend-line"
+                                  x1={xOf(minDate)}
+                                  y1={y1}
+                                  x2={xOf(maxDate)}
+                                  y2={y2}
+                                />
+                                <text x={width - padRight} y={padTop + 4} className="activity-trend-label" textAnchor="end">
+                                  Interview rate: {interviewCount}/{recent.length} ({Math.round((interviewCount / recent.length) * 100)}%)
+                                </text>
+                              </>
                             )
                           })()}
                           {recent.map((application) => {
