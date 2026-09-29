@@ -344,7 +344,7 @@ function ApplicationTable({
                 <label className="status-select-wrap">
                   <span className="sr-only">Status for {application.jobTitle} at {application.company}</span>
                   <select value={application.status} onChange={(event) => onStatusChange(application.id, event.target.value as Status)}>
-                    {statuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
+                    {statuses.filter((status) => status !== 'SAVED' || application.status === 'SAVED').map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
                   </select>
                   <ChevronDown size={13} aria-hidden="true" />
                 </label>
@@ -1603,7 +1603,7 @@ function App() {
               <div className="form-grid">
                 <label className="form-field"><span>Company <b>*</b></span><input required maxLength={120} value={draft.company} onChange={(event) => setDraft({ ...draft, company: event.target.value })} placeholder="e.g. Acme Studio" autoFocus /></label>
                 <label className="form-field"><span>Job title <b>*</b></span><input required maxLength={200} value={draft.jobTitle} onChange={(event) => setDraft({ ...draft, jobTitle: event.target.value })} placeholder="e.g. Product Designer" /></label>
-                <label className="form-field"><span>Status</span><span className="form-select"><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as Status })}>{statuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</select><ChevronDown size={14} /></span></label>
+                <label className="form-field"><span>Status</span><span className="form-select"><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as Status })}>{statuses.filter((status) => status !== 'SAVED' || !editing || editing.status === 'SAVED').map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</select><ChevronDown size={14} /></span></label>
                 <label className="form-field"><span>Date applied</span><input type="date" value={draft.dateApplied} onChange={(event) => setDraft({ ...draft, dateApplied: event.target.value })} /></label>
                 <label className="form-field"><span>Location</span><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} placeholder="Remote, city, or hybrid" /></label>
                 <label className="form-field"><span>Salary range</span><input maxLength={80} value={draft.salary} onChange={(event) => setDraft({ ...draft, salary: event.target.value })} placeholder="Optional" /></label>
