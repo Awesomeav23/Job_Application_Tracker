@@ -26,9 +26,15 @@ function isSupportedMimeType(mimeType: string) {
 
 const MAX_EXTRACTED_CHARS = 50000;
 
+// Postgres text columns reject NUL bytes (0x00). PDFs, DOCX, and even
+// plain-text files can contain them, so strip before storing.
+function sanitizeText(text: string): string {
+  return text.replace(/\u0000/g, '');
+}
+
 async function extractedTextFromBuffer(buffer: Buffer, mimeType: string): Promise<string | null> {
   if (mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType.includes('xml')) {
-    return buffer.toString('utf8').slice(0, MAX_EXTRACTED_CHARS);
+    return sanitizeText(buffer.toString('utf8')).slice(0, MAX_EXTRACTED_CHARS);
   }
 
   if (mimeType === 'application/pdf') {
@@ -40,7 +46,7 @@ async function extractedTextFromBuffer(buffer: Buffer, mimeType: string): Promis
     const parser = new PDFParse({ data: new Uint8Array(buffer) });
     try {
       const result = await parser.getText();
-      const text = (result.text ?? '').trim();
+      const text = sanitizeText((result.text ?? '').trim());
       return text ? text.slice(0, MAX_EXTRACTED_CHARS) : null;
     } catch {
       return null;
@@ -52,7 +58,7 @@ async function extractedTextFromBuffer(buffer: Buffer, mimeType: string): Promis
   if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     try {
       const { value } = await mammoth.extractRawText({ buffer });
-      const text = (value ?? '').trim();
+      const text = sanitizeText((value ?? '').trim());
       return text ? text.slice(0, MAX_EXTRACTED_CHARS) : null;
     } catch {
       return null;
