@@ -403,10 +403,6 @@ function App() {
   const [renameValue, setRenameValue] = useState('')
   const [documentBusyId, setDocumentBusyId] = useState<string | null>(null)
   const [documentDeleteTarget, setDocumentDeleteTarget] = useState<AppDocument | null>(null)
-  const [inlineUploadKind, setInlineUploadKind] = useState<DocumentKind | null>(null)
-  const [inlineUploadLabel, setInlineUploadLabel] = useState('')
-  const [inlineUploadFile, setInlineUploadFile] = useState<File | null>(null)
-  const [inlineUploading, setInlineUploading] = useState(false)
   const [accountMenu, setAccountMenu] = useState<'sidebar' | 'topbar' | null>(null)
   const [displayNameModalOpen, setDisplayNameModalOpen] = useState(false)
   const [displayNameDraft, setDisplayNameDraft] = useState('')
@@ -614,51 +610,6 @@ function App() {
       setDocumentError(applicationErrorMessage(error, 'Unable to upload document.'))
     } finally {
       setDocumentUploading(false)
-    }
-  }
-
-  function openInlineUpload(kind: DocumentKind) {
-    setInlineUploadKind(kind)
-    setInlineUploadLabel('')
-    setInlineUploadFile(null)
-    setApplicationError('')
-  }
-
-  function closeInlineUpload() {
-    setInlineUploadKind(null)
-    setInlineUploadLabel('')
-    setInlineUploadFile(null)
-  }
-
-  async function submitInlineUpload(kind: DocumentKind) {
-    if (!inlineUploadFile) {
-      setApplicationError('Choose a file to upload.')
-      return
-    }
-    const label = inlineUploadLabel.trim()
-    if (!label) {
-      setApplicationError('Give the document a label so you can find it later.')
-      return
-    }
-    setInlineUploading(true)
-    setApplicationError('')
-    try {
-      const form = new FormData()
-      form.append('file', inlineUploadFile)
-      form.append('kind', kind)
-      form.append('label', label)
-      const saved = await apiFetch<ApiDocument>('/documents', { method: 'POST', body: form })
-      const document = fromApiDocument(saved)
-      setDocuments((current) => [document, ...current])
-      setDraft((current) => (kind === 'RESUME'
-        ? { ...current, resumeId: document.id }
-        : { ...current, coverLetterId: document.id }))
-      closeInlineUpload()
-      setNotice(`${documentKindLabel(kind)} uploaded`)
-    } catch (error) {
-      setApplicationError(applicationErrorMessage(error, 'Unable to upload document.'))
-    } finally {
-      setInlineUploading(false)
     }
   }
 
@@ -1631,7 +1582,7 @@ function App() {
                 <label className="form-field form-wide"><span>Job posting URL</span><input type="url" maxLength={500} value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} placeholder="https://" /></label>
                 <label className="form-field form-wide"><span>Job description <b>*</b></span><textarea required maxLength={12000} rows={4} value={draft.jobDescription} onChange={(event) => setDraft({ ...draft, jobDescription: event.target.value })} placeholder="Paste the job description or a short summary" /></label>
                 <label className="form-field form-wide"><span>Notes</span><textarea maxLength={4000} rows={3} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder="Follow-ups, people, or details to remember" /></label>
-                <div className="form-field">
+                <label className="form-field">
                   <span>Resume</span>
                   <span className="form-select">
                     <select value={draft.resumeId ?? ''} onChange={(event) => setDraft({ ...draft, resumeId: event.target.value || null })}>
@@ -1640,20 +1591,9 @@ function App() {
                     </select>
                     <ChevronDown size={14} />
                   </span>
-                  {inlineUploadKind === 'RESUME' ? (
-                    <div className="inline-upload">
-                      <input placeholder="Label (e.g. Frontend Engineer resume v1)" maxLength={200} value={inlineUploadLabel} onChange={(event) => setInlineUploadLabel(event.target.value)} />
-                      <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" onChange={(event) => setInlineUploadFile(event.target.files?.[0] ?? null)} />
-                      <div className="inline-upload-actions">
-                        <button type="button" className="secondary-button" onClick={closeInlineUpload} disabled={inlineUploading}>Cancel</button>
-                        <button type="button" className="primary-button" onClick={() => void submitInlineUpload('RESUME')} disabled={inlineUploading}><Upload size={14} />{inlineUploading ? 'Uploading…' : 'Upload'}</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button type="button" className="link-button" onClick={() => openInlineUpload('RESUME')}><Upload size={12} />Upload new resume</button>
-                  )}
-                </div>
-                <div className="form-field">
+                  {resumeOptions.length === 0 && <small className="form-hint">No resumes yet. Upload one from the Documents page.</small>}
+                </label>
+                <label className="form-field">
                   <span>Cover letter</span>
                   <span className="form-select">
                     <select value={draft.coverLetterId ?? ''} onChange={(event) => setDraft({ ...draft, coverLetterId: event.target.value || null })}>
@@ -1662,19 +1602,8 @@ function App() {
                     </select>
                     <ChevronDown size={14} />
                   </span>
-                  {inlineUploadKind === 'COVER_LETTER' ? (
-                    <div className="inline-upload">
-                      <input placeholder="Label (e.g. Frontend Engineer cover letter)" maxLength={200} value={inlineUploadLabel} onChange={(event) => setInlineUploadLabel(event.target.value)} />
-                      <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" onChange={(event) => setInlineUploadFile(event.target.files?.[0] ?? null)} />
-                      <div className="inline-upload-actions">
-                        <button type="button" className="secondary-button" onClick={closeInlineUpload} disabled={inlineUploading}>Cancel</button>
-                        <button type="button" className="primary-button" onClick={() => void submitInlineUpload('COVER_LETTER')} disabled={inlineUploading}><Upload size={14} />{inlineUploading ? 'Uploading…' : 'Upload'}</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button type="button" className="link-button" onClick={() => openInlineUpload('COVER_LETTER')}><Upload size={12} />Upload new cover letter</button>
-                  )}
-                </div>
+                  {coverLetterOptions.length === 0 && <small className="form-hint">No cover letters yet. Upload one from the Documents page.</small>}
+                </label>
               </div>
               <div className="modal-actions"><span><b>*</b> Required fields</span><div><button type="button" className="secondary-button" onClick={() => setFormOpen(false)}>Cancel</button><button type="submit" className="primary-button" disabled={applicationSaving}><Check size={16} />{applicationSaving ? 'Saving…' : editing ? 'Save changes' : 'Save application'}</button></div></div>
             </form>
