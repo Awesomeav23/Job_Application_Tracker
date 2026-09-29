@@ -1031,6 +1031,7 @@
 .activity-swatch-created { background: #4a5aa8; }
 .activity-swatch-applied { background: #29a55b; }
 
+.activity-trend-line { stroke: #98a3c4; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 4 3; opacity: 0.75; }
 .activity-scatter-point { stroke: #fff; stroke-width: 2; transition: r 120ms ease; cursor: pointer; }
 .activity-scatter-point:hover { r: 8; }
 .status-scatter-saved { fill: #a6b598; }

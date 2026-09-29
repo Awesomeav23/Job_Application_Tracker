@@ -1297,6 +1297,13 @@ function App() {
                               <text key={ts + '-' + i} x={xOf(ts)} y={height - padBottom + 18} className="activity-axis-label" textAnchor="middle">{label}</text>
                             )
                           })}
+                          {recent.length > 1 && (
+                            <polyline
+                              className="activity-trend-line"
+                              fill="none"
+                              points={recent.map((application) => `${xOf(new Date(application.dateApplied).getTime())},${yOf(stageForStatus[application.status])}`).join(' ')}
+                            />
+                          )}
                           {recent.map((application) => {
                             const stage = stageForStatus[application.status]
                             const ts = new Date(application.dateApplied).getTime()
