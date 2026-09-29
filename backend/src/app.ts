@@ -36,7 +36,10 @@ app.get('/health', (_req, res) => {
 });
 
 // A basic API root endpoint to confirm the server is responding.
-app.get('/api', (_req, res) => {
+// The '/' handler covers Vercel's behavior of stripping the '/api' prefix
+// when invoking api/index.ts directly at exactly '/api' (the rewrite skips
+// that case), so both paths return the same status.
+app.get(['/api', '/'], (_req, res) => {
   res.json({ name: 'AI Job Application Tracker API', status: 'ok' });
 });
 
