@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
+import confetti from 'canvas-confetti'
 import { ApiError, apiFetch, authenticate, clearSession, downloadDocument, getCurrentUser, hasSession, type AuthUser } from './lib/api'
 
 type Status = 'SAVED' | 'APPLIED' | 'RECRUITER_SCREEN' | 'INTERVIEW' | 'OFFER' | 'REJECTED' | 'WITHDRAWN'
@@ -341,7 +342,7 @@ function ApplicationTable({
                 </button>
               </td>
               <td>
-                <label className="status-select-wrap">
+                <label className={`status-select-wrap status-select-${application.status.toLowerCase()}`}>
                   <span className="sr-only">Status for {application.jobTitle} at {application.company}</span>
                   <select value={application.status} onChange={(event) => onStatusChange(application.id, event.target.value as Status)}>
                     {statuses.filter((status) => status !== 'SAVED' || application.status === 'SAVED').map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}
@@ -1016,8 +1017,30 @@ function App() {
     }
   }
 
+  function celebrateOffer() {
+    const duration = 1200
+    const end = Date.now() + duration
+    ;(function frame() {
+      confetti({ particleCount: 4, angle: 60, spread: 55, origin: { x: 0 } })
+      confetti({ particleCount: 4, angle: 120, spread: 55, origin: { x: 1 } })
+      if (Date.now() < end) requestAnimationFrame(frame)
+    })()
+  }
+
   async function updateStatus(id: string, status: Status) {
     setApplicationError('')
+    // Withdrawing an application removes it from the tracker entirely.
+    if (status === 'WITHDRAWN') {
+      try {
+        await apiFetch<{ deleted: boolean }>(`/applications/${id}`, { method: 'DELETE' })
+        setApplications((current) => current.filter((item) => item.id !== id))
+        setNotice('Application withdrawn and removed')
+        void refreshAnalytics()
+      } catch (error) {
+        setApplicationError(applicationErrorMessage(error, 'Unable to withdraw application.'))
+      }
+      return
+    }
     try {
       const updated = await apiFetch<ApiApplication>(`/applications/${id}`, {
         method: 'PATCH',
@@ -1026,6 +1049,7 @@ function App() {
       const application = fromApiApplication(updated)
       setApplications((current) => current.map((item) => item.id === id ? application : item))
       setNotice('Status updated')
+      if (status === 'OFFER') celebrateOffer()
       void refreshAnalytics()
     } catch (error) {
       setApplicationError(applicationErrorMessage(error, 'Unable to update status.'))
