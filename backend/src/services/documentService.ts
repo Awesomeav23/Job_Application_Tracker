@@ -1,6 +1,5 @@
 import path from 'path';
 import mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
 import { prisma } from '../config/prisma';
 
 function buildStorageKey(userId: string, fileName: string) {
@@ -33,6 +32,11 @@ async function extractedTextFromBuffer(buffer: Buffer, mimeType: string): Promis
   }
 
   if (mimeType === 'application/pdf') {
+    // Lazy-load pdf-parse: its optional @napi-rs/canvas dep throws on
+    // serverless cold starts (Vercel), which would crash the whole app
+    // before /health could respond. Importing here confines the failure
+    // to PDF uploads specifically.
+    const { PDFParse } = await import('pdf-parse');
     const parser = new PDFParse({ data: new Uint8Array(buffer) });
     try {
       const result = await parser.getText();
