@@ -1118,3 +1118,42 @@
   .auth-mobile-brand { margin-bottom: 25px; }
   .auth-form-wrap { padding: 19px 16px; }
 }
+
+.link-button {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  color: #4f6ef7;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.link-button:hover { text-decoration: underline; }
+
+.inline-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px dashed #cdd3e4;
+  border-radius: 6px;
+  background: #fafbfe;
+}
+.inline-upload input:not([type="file"]),
+.inline-upload input[type="file"] {
+  padding: 6px 8px;
+  border: 1px solid #d5d9e6;
+  border-radius: 5px;
+  background: #fff;
+  font-size: 12px;
+}
+.inline-upload-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
