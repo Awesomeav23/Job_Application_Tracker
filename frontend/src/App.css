@@ -418,13 +418,13 @@
 .status-rejected { --dot-color: #d63f3f; }
 .status-withdrawn { --dot-color: #989795; }
 
-.status-select-saved select { background: #eef1e9; border-color: #d0d8c4; color: #5b6a54; }
-.status-select-applied select { background: #e6efff; border-color: #b7cdf0; color: #2a4c85; }
-.status-select-recruiter_screen select { background: #eaf0f3; border-color: #c1d1d9; color: #38596a; }
-.status-select-interview select { background: #fdefdf; border-color: #f2d0a4; color: #8a5320; }
-.status-select-offer select { background: #dff5e6; border-color: #9edcb2; color: #1a7a3f; font-weight: 700; }
-.status-select-rejected select { background: #fbe0e0; border-color: #e8a8a8; color: #9b2b2b; font-weight: 700; }
-.status-select-withdrawn select { background: #ececec; border-color: #cfcfcf; color: #666; }
+.status-select-wrap.status-select-saved select { background: #eef1e9; border-color: #d0d8c4; color: #5b6a54; }
+.status-select-wrap.status-select-applied select { background: #e6efff; border-color: #b7cdf0; color: #2a4c85; }
+.status-select-wrap.status-select-recruiter_screen select { background: #eaf0f3; border-color: #c1d1d9; color: #38596a; }
+.status-select-wrap.status-select-interview select { background: #fdefdf; border-color: #f2d0a4; color: #8a5320; }
+.status-select-wrap.status-select-offer select { background: #dff5e6; border-color: #9edcb2; color: #1a7a3f; font-weight: 700; }
+.status-select-wrap.status-select-rejected select { background: #fbe0e0; border-color: #e8a8a8; color: #9b2b2b; font-weight: 700; }
+.status-select-wrap.status-select-withdrawn select { background: #ececec; border-color: #cfcfcf; color: #666; }
 .pipeline-track { height: 7px; overflow: hidden; border-radius: 8px; background: #eef1ec; }
 .pipeline-fill { display: block; height: 100%; border-radius: inherit; background: var(--dot-color, #6d9e87); transition: width 180ms ease; }
 .pipeline-row > strong { color: #44564a; font-size: 11px; text-align: right; }
