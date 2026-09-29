@@ -92,7 +92,14 @@ router.post('/', async (req, res) => {
     }
 
     console.error('Document upload error:', error);
-    return res.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'Unable to upload document' } });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack?.split('\n').slice(0, 3).join(' | ') : '';
+    return res.status(500).json({
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Upload failed: ${errMsg}${errStack ? ` [${errStack}]` : ''}`,
+      },
+    });
   }
 });
 

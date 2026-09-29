@@ -38,20 +38,23 @@ async function extractedTextFromBuffer(buffer: Buffer, mimeType: string): Promis
   }
 
   if (mimeType === 'application/pdf') {
-    // Lazy-load pdf-parse: its optional @napi-rs/canvas dep throws on
-    // serverless cold starts (Vercel), which would crash the whole app
-    // before /health could respond. Importing here confines the failure
-    // to PDF uploads specifically.
-    const { PDFParse } = await import('pdf-parse');
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
+    // pdf-parse v2 depends on pdfjs-dist which uses DOMMatrix (browser
+    // API missing in Node serverless like Vercel). Wrap the entire
+    // import + parse in try/catch so PDF uploads still succeed — they
+    // just skip text extraction. Analysis handles null extractedText.
     try {
-      const result = await parser.getText();
-      const text = sanitizeText((result.text ?? '').trim());
-      return text ? text.slice(0, MAX_EXTRACTED_CHARS) : null;
-    } catch {
+      const { PDFParse } = await import('pdf-parse');
+      const parser = new PDFParse({ data: new Uint8Array(buffer) });
+      try {
+        const result = await parser.getText();
+        const text = sanitizeText((result.text ?? '').trim());
+        return text ? text.slice(0, MAX_EXTRACTED_CHARS) : null;
+      } finally {
+        await parser.destroy().catch(() => undefined);
+      }
+    } catch (error) {
+      console.warn('PDF text extraction unavailable:', error instanceof Error ? error.message : error);
       return null;
-    } finally {
-      await parser.destroy().catch(() => undefined);
     }
   }
 
