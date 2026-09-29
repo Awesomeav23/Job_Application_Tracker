@@ -95,3 +95,20 @@ export function getCurrentUser() {
 export function apiFetch<T>(path: string, init: RequestInit = {}) {
   return apiRequest<T>(path, init)
 }
+
+export async function downloadDocument(documentId: string): Promise<Blob> {
+  const token = getToken()
+  const response = await fetch(`${API_BASE_URL}/documents/${documentId}/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as ApiErrorBody | null
+    if (response.status === 401) clearSession()
+    throw new ApiError(
+      body?.error?.message || `Download failed (${response.status})`,
+      response.status,
+      body?.error?.code,
+    )
+  }
+  return response.blob()
+}

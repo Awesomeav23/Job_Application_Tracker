@@ -977,6 +977,19 @@
 .documents-item-body { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
 .documents-item-body strong { color: #1e2a4d; font-size: 13px; }
 .documents-item-body small { color: #6d7692; font-size: 11px; }
+.documents-item-name {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #1e2a4d;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.documents-item-name:hover:not(:disabled) { color: #4f6ef7; text-decoration: underline; }
+.documents-item-name:disabled { cursor: wait; opacity: 0.6; }
 .documents-item-actions { display: inline-flex; gap: 4px; }
 .documents-rename { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .documents-rename input { flex: 1 1 200px; min-width: 160px; padding: 6px 10px; border: 1px solid #d5d9e6; border-radius: 5px; font-size: 12px; }

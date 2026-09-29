@@ -26,7 +26,7 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
-import { ApiError, apiFetch, authenticate, clearSession, getCurrentUser, hasSession, type AuthUser } from './lib/api'
+import { ApiError, apiFetch, authenticate, clearSession, downloadDocument, getCurrentUser, hasSession, type AuthUser } from './lib/api'
 
 type Status = 'SAVED' | 'APPLIED' | 'RECRUITER_SCREEN' | 'INTERVIEW' | 'OFFER' | 'REJECTED' | 'WITHDRAWN'
 type View = 'overview' | 'board' | 'applications' | 'stats' | 'documents' | 'profile' | 'settings'
@@ -610,6 +610,26 @@ function App() {
       setDocumentError(applicationErrorMessage(error, 'Unable to upload document.'))
     } finally {
       setDocumentUploading(false)
+    }
+  }
+
+  async function handleDownloadDocument(item: AppDocument) {
+    setDocumentError('')
+    setDocumentBusyId(item.id)
+    try {
+      const blob = await downloadDocument(item.id)
+      const url = URL.createObjectURL(blob)
+      const anchor = window.document.createElement('a')
+      anchor.href = url
+      anchor.download = item.originalFileName || item.label
+      window.document.body.appendChild(anchor)
+      anchor.click()
+      window.document.body.removeChild(anchor)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setDocumentError(applicationErrorMessage(error, 'Unable to download document.'))
+    } finally {
+      setDocumentBusyId(null)
     }
   }
 
@@ -1428,7 +1448,15 @@ function App() {
                               </form>
                             ) : (
                               <>
-                                <strong>{document.label}</strong>
+                                <button
+                                  type="button"
+                                  className="documents-item-name"
+                                  onClick={() => void handleDownloadDocument(document)}
+                                  disabled={busy}
+                                  title={`Download ${document.originalFileName}`}
+                                >
+                                  {document.label}
+                                </button>
                                 <small>{document.originalFileName} · {formatBytes(document.sizeBytes)}{document.version ? ` · ${document.version}` : ''} · Uploaded {formatDate(document.createdAt.slice(0, 10))}</small>
                               </>
                             )}
