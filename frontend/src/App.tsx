@@ -621,7 +621,7 @@ function App() {
     setInlineUploadKind(kind)
     setInlineUploadLabel('')
     setInlineUploadFile(null)
-    setDocumentError('')
+    setApplicationError('')
   }
 
   function closeInlineUpload() {
@@ -632,16 +632,16 @@ function App() {
 
   async function submitInlineUpload(kind: DocumentKind) {
     if (!inlineUploadFile) {
-      setDocumentError('Choose a file to upload.')
+      setApplicationError('Choose a file to upload.')
       return
     }
     const label = inlineUploadLabel.trim()
     if (!label) {
-      setDocumentError('Give the document a label so you can find it later.')
+      setApplicationError('Give the document a label so you can find it later.')
       return
     }
     setInlineUploading(true)
-    setDocumentError('')
+    setApplicationError('')
     try {
       const form = new FormData()
       form.append('file', inlineUploadFile)
@@ -656,7 +656,7 @@ function App() {
       closeInlineUpload()
       setNotice(`${documentKindLabel(kind)} uploaded`)
     } catch (error) {
-      setDocumentError(applicationErrorMessage(error, 'Unable to upload document.'))
+      setApplicationError(applicationErrorMessage(error, 'Unable to upload document.'))
     } finally {
       setInlineUploading(false)
     }
