@@ -45,7 +45,13 @@ export async function createApplication(userId: string, input: unknown) {
 export async function listApplications(userId: string) {
   return prisma.application.findMany({
     where: { userId },
-    orderBy: { createdAt: 'desc' },
+    // Order by dateApplied so the most recently applied-to roles are at the
+    // top of the user's list. createdAt is the fallback for apps without a
+    // dateApplied set (e.g. still in SAVED).
+    orderBy: [
+      { dateApplied: { sort: 'desc', nulls: 'last' } },
+      { createdAt: 'desc' },
+    ],
     include: {
       resume: true,
       coverLetter: true,
