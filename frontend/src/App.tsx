@@ -178,6 +178,41 @@ const emptyDraft: ApplicationDraft = {
   resumeId: null, coverLetterId: null, resume: null, coverLetter: null,
 }
 
+// Dropdown hints for the Location field in the create/edit modal. Users can
+// still type anything — these just appear as autocomplete suggestions.
+const locationSuggestions = [
+  'Remote · US',
+  'Remote · Global',
+  'Hybrid',
+  'San Francisco, CA',
+  'San Francisco, CA · Hybrid',
+  'New York, NY',
+  'New York, NY · Hybrid',
+  'Seattle, WA',
+  'Seattle, WA · Hybrid',
+  'Austin, TX',
+  'Austin, TX · Hybrid',
+  'Boston, MA',
+  'Boston, MA · Hybrid',
+  'Los Angeles, CA',
+  'Los Angeles, CA · Hybrid',
+  'Chicago, IL',
+  'Chicago, IL · Hybrid',
+  'Denver, CO',
+  'Denver, CO · Hybrid',
+  'Portland, OR',
+  'Atlanta, GA',
+  'Washington, DC',
+  'Dallas, TX',
+  'Houston, TX',
+  'Miami, FL',
+  'Minneapolis, MN',
+  'Nashville, TN',
+  'Pittsburgh, PA',
+  'Raleigh, NC',
+  'San Diego, CA',
+] as const
+
 const sampleCompanies = [
   { name: 'Northstar Analytics', location: 'Remote · US' },
   { name: 'Cedar Labs', location: 'Boston, MA · Hybrid' },
@@ -1768,7 +1803,19 @@ function App() {
                 <label className="form-field"><span>Job title <b>*</b></span><input required maxLength={200} value={draft.jobTitle} onChange={(event) => setDraft({ ...draft, jobTitle: event.target.value })} placeholder="e.g. Product Designer" /></label>
                 <label className="form-field"><span>Status</span><span className="form-select"><select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as Status })}>{statuses.filter((status) => status !== 'SAVED' || !editing || editing.status === 'SAVED').map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</select><ChevronDown size={14} /></span></label>
                 <label className="form-field"><span>Date applied</span><input type="date" value={draft.dateApplied} onChange={(event) => setDraft({ ...draft, dateApplied: event.target.value })} /></label>
-                <label className="form-field"><span>Location</span><input maxLength={120} value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} placeholder="Remote, city, or hybrid" /></label>
+                <label className="form-field">
+                  <span>Location</span>
+                  <input
+                    maxLength={120}
+                    value={draft.location}
+                    onChange={(event) => setDraft({ ...draft, location: event.target.value })}
+                    placeholder="Remote, city, or hybrid"
+                    list="location-suggestions"
+                  />
+                  <datalist id="location-suggestions">
+                    {locationSuggestions.map((location) => <option key={location} value={location} />)}
+                  </datalist>
+                </label>
                 <label className="form-field"><span>Salary range</span><input maxLength={80} value={draft.salary} onChange={(event) => setDraft({ ...draft, salary: event.target.value })} placeholder="Optional" /></label>
                 <label className="form-field form-wide"><span>Job posting URL</span><input type="url" maxLength={500} value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} placeholder="https://" /></label>
                 <label className="form-field form-wide"><span>Job description <b>*</b></span><textarea required maxLength={12000} rows={4} value={draft.jobDescription} onChange={(event) => setDraft({ ...draft, jobDescription: event.target.value })} placeholder="Paste the job description or a short summary" /></label>
