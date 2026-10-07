@@ -959,6 +959,9 @@
 .api-loading-table { display: grid; min-height: 190px; place-items: center; color: #79849a; font-size: 13px; }
 
 .location-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.location-inline-input { padding: 4px 6px; border: 1px dashed #cdd3e4; border-radius: 4px; background: transparent; font: inherit; color: inherit; min-width: 140px; }
+.location-inline-input:hover { border-color: #94a198; }
+.location-inline-input:focus { outline: none; border-style: solid; border-color: #6b8a7a; background: #fff; }
 .attachment-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .attachment-tag { display: inline-flex; max-width: 200px; align-items: center; gap: 4px; padding: 2px 7px; border: 1px solid #d9e0ef; border-radius: 999px; background: #f2f4fb; color: #495a83; font-size: 10px; font-weight: 600; letter-spacing: 0.2px; }
 .attachment-tag > span, .attachment-tag { overflow: hidden; }

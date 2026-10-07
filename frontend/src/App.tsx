@@ -529,13 +529,24 @@ function ApplicationTable({
   applications,
   onEdit,
   onStatusChange,
+  onLocationChange,
   onDelete,
 }: {
   applications: Application[]
   onEdit: (application: Application) => void
   onStatusChange: (id: string, status: Status) => void
+  onLocationChange: (id: string, location: string) => void
   onDelete: (application: Application) => void
 }) {
+  const [locationDraft, setLocationDraft] = useState<Record<string, string>>({})
+
+  function commitLocation(id: string, current: string | undefined) {
+    const draft = locationDraft[id]
+    if (draft === undefined) return
+    if (draft.trim() === (current ?? '').trim()) return
+    onLocationChange(id, draft)
+  }
+
   if (applications.length === 0) {
     return <div className="empty-state"><BriefcaseBusiness size={25} /><strong>No applications match</strong><span>Try another search or clear the status filter.</span></div>
   }
@@ -566,7 +577,33 @@ function ApplicationTable({
               <td className="location-cell">
                 <MapPin size={13} aria-hidden="true" />
                 <span className="location-copy">
-                  <span>{application.location || '—'}</span>
+                  {application.location ? (
+                    <span>{application.location}</span>
+                  ) : (
+                    <input
+                      className="location-inline-input"
+                      type="text"
+                      placeholder="Add location…"
+                      list="location-suggestions"
+                      value={locationDraft[application.id] ?? ''}
+                      onChange={(event) => setLocationDraft((current) => ({ ...current, [application.id]: event.target.value }))}
+                      onBlur={() => commitLocation(application.id, application.location)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          ;(event.target as HTMLInputElement).blur()
+                        }
+                        if (event.key === 'Escape') {
+                          setLocationDraft((current) => {
+                            const { [application.id]: _unused, ...rest } = current
+                            return rest
+                          })
+                          ;(event.target as HTMLInputElement).blur()
+                        }
+                      }}
+                      aria-label={`Location for ${application.jobTitle} at ${application.company}`}
+                    />
+                  )}
                   {(application.resume || application.coverLetter) && (
                     <span className="attachment-tags">
                       {application.resume && <span className="attachment-tag" title={`Resume · ${application.resume.label}`}><FileText size={11} />{application.resume.label}</span>}
@@ -1232,6 +1269,22 @@ function App() {
     })()
   }
 
+  async function updateLocation(id: string, location: string) {
+    setApplicationError('')
+    const nextLocation = location.trim()
+    try {
+      const updated = await apiFetch<ApiApplication>(`/applications/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ location: nextLocation }),
+      })
+      const application = fromApiApplication(updated)
+      setApplications((current) => current.map((item) => item.id === id ? application : item))
+      setNotice('Location updated')
+    } catch (error) {
+      setApplicationError(applicationErrorMessage(error, 'Unable to update location.'))
+    }
+  }
+
   async function updateStatus(id: string, status: Status) {
     setApplicationError('')
     // Withdrawing an application removes it from the tracker entirely.
@@ -1277,6 +1330,11 @@ function App() {
 
   return (
     <div className="app-frame">
+      {/* Shared location autocomplete source so both the modal and the inline
+          table input can reference `list="location-suggestions"`. */}
+      <datalist id="location-suggestions">
+        {locationSuggestions.map((location) => <option key={location} value={location} />)}
+      </datalist>
       <aside className="sidebar">
         <a className="brand" href="#dashboard" onClick={(event) => { event.preventDefault(); setView('overview') }}>
           <span className="brand-symbol"><BriefcaseBusiness size={17} strokeWidth={2.2} /></span>
@@ -1802,7 +1860,7 @@ function App() {
               <section className="applications-summary"><div><strong>{filteredApplications.length}</strong><span>{filteredApplications.length === 1 ? 'application' : 'applications'}</span></div><div className="summary-divider" /><div><strong>{interviews}</strong><span>active conversations</span></div><div className="summary-note"><span className="summary-spark"><Sparkles size={14} /></span>One clear next step is enough for today.</div></section>
               <section className="panel applications-panel">
                 <div className="table-toolbar"><div className="toolbar-title"><h2>All applications</h2><span>{applications.length.toString().padStart(2, '0')} total</span></div><div className="table-controls"><label className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search roles or companies" aria-label="Search roles or companies" />{query && <button aria-label="Clear search" onClick={() => setQuery('')}><X size={14} /></button>}</label><label className="filter-select"><span className="sr-only">Filter by status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">All statuses</option>{statuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</select><ChevronDown size={14} /></label></div></div>
-                {applicationsLoading ? <div className="api-loading-table">Loading your applications…</div> : <ApplicationTable applications={filteredApplications} onEdit={openEditForm} onStatusChange={updateStatus} onDelete={setDeleteTarget} />}
+                {applicationsLoading ? <div className="api-loading-table">Loading your applications…</div> : <ApplicationTable applications={filteredApplications} onEdit={openEditForm} onStatusChange={updateStatus} onLocationChange={updateLocation} onDelete={setDeleteTarget} />}
                 <div className="table-footer"><span>Showing {filteredApplications.length} of {applications.length} applications</span><button onClick={openCreateForm}><Plus size={14} />New application</button></div>
               </section>
               <footer className="page-footer"><span>FIELDNOTE <span className="footer-dot">·</span> YOUR SEARCH, ORGANIZED</span><button onClick={() => setNotice('Your data is currently saved for this session only. API connection is the next step.')}><FileText size={13} /> Data status</button></footer>
@@ -1933,9 +1991,6 @@ function App() {
                     placeholder="Remote, city, or hybrid"
                     list="location-suggestions"
                   />
-                  <datalist id="location-suggestions">
-                    {locationSuggestions.map((location) => <option key={location} value={location} />)}
-                  </datalist>
                 </label>
                 <label className="form-field"><span>Salary range</span><input maxLength={80} value={draft.salary} onChange={(event) => setDraft({ ...draft, salary: event.target.value })} placeholder="Optional" /></label>
                 <label className="form-field form-wide"><span>Job posting URL</span><input type="url" maxLength={500} value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} placeholder="https://" /></label>
