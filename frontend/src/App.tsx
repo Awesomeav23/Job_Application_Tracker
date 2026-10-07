@@ -144,7 +144,7 @@ type ApplicationModalTab = 'details' | 'ai'
 const statuses: Status[] = ['SAVED', 'APPLIED', 'RECRUITER_SCREEN', 'INTERVIEW', 'OFFER', 'REJECTED', 'WITHDRAWN']
 const sources = ['MANUAL', 'EXTENSION'] as const
 const SAVED_EMAILS_KEY = 'fieldnote.savedEmails'
-const SAMPLE_SEEDED_PREFIX = 'fieldnote.sampleApplicationsSeeded.v4:'
+const SAMPLE_SEEDED_PREFIX = 'fieldnote.sampleApplicationsSeeded.v5:'
 
 function getSavedEmails(): string[] {
   try {
@@ -259,7 +259,42 @@ const recentInterviewBatch: Array<{
   { company: 'Harbor Health', jobTitle: 'Data Scientist', jobDescription: 'Predictive models for chronic-care programs.', status: 'REJECTED', location: 'Remote · US', salary: '$132,000–$158,000', url: 'https://example.com/jobs/harbor-data-scientist', notes: 'Role closed after final round.', daysAgo: 66 },
 ]
 
-const sampleApplications = [...baseSampleApplications, ...recentInterviewBatch]
+// Real applications sent by the project owner (Sep 30 – Oct 6, 2026). Shown
+// alongside synthetic samples so the demo reflects actual recent activity.
+const realApplications: Array<{
+  company: string
+  jobTitle: string
+  jobDescription: string
+  status: Status
+  location: string
+  salary: string
+  url: string
+  notes: string
+  daysAgo: number
+}> = [
+  { company: 'Roku', jobTitle: 'Software Engineer (Project Ahsoka)', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 1 },
+  { company: 'Lockheed Martin', jobTitle: 'Associate Member Engineering Staff', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 1 },
+  { company: 'Caris Life Sciences', jobTitle: 'Associate Software Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 1 },
+  { company: 'Capgemini', jobTitle: 'Associate Software Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 2 },
+  { company: 'Pave', jobTitle: 'Software Engineer 1', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 2 },
+  { company: 'LSEG', jobTitle: 'Software Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 2 },
+  { company: 'FedEx', jobTitle: 'Full Stack Engineer II', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 2 },
+  { company: 'Ascendion', jobTitle: 'Software Engineer II', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 2 },
+  { company: 'Voltus', jobTitle: 'Software Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 2 },
+  { company: 'Cynet Systems', jobTitle: 'Full Stack Web Developer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 5 },
+  { company: 'SAS', jobTitle: 'Software Developer (Emerging Careers)', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 5 },
+  { company: 'State Farm', jobTitle: 'Software Engineer', jobDescription: '', status: 'REJECTED', location: '', salary: '', url: '', notes: 'Rejected the next day.', daysAgo: 5 },
+  { company: 'Visa', jobTitle: 'Software Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 5 },
+  { company: 'AWS', jobTitle: 'Associate Solutions Architect', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 5 },
+  { company: 'ElevenLabs', jobTitle: 'Full-Stack Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 6 },
+  { company: 'Fonzi', jobTitle: 'Full Stack Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: 'Talent marketplace.', daysAgo: 6 },
+  { company: 'Bain & Company', jobTitle: 'Full Stack Software Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 7 },
+  { company: 'Sunwest Bank', jobTitle: 'Technology Analyst Program', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 7 },
+  { company: 'Steadfast AI', jobTitle: 'Software Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 7 },
+  { company: 'Clerkie', jobTitle: 'Full-Stack Engineer', jobDescription: '', status: 'APPLIED', location: '', salary: '', url: '', notes: '', daysAgo: 7 },
+]
+
+const sampleApplications = [...baseSampleApplications, ...recentInterviewBatch, ...realApplications]
 
 function formatDate(value: string) {
   if (!value) return 'Not set'
